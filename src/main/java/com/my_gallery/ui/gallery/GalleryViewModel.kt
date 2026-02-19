@@ -16,6 +16,7 @@ import com.my_gallery.data.repository.RenameResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import com.my_gallery.domain.model.AlbumItem
+import com.my_gallery.data.local.dao.SectionMetadataRow
 
 enum class GallerySource { LOCAL }
 
@@ -154,6 +155,42 @@ class GalleryViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Lazily, listOf("Todas"))
 
     @OptIn(ExperimentalCoroutinesApi::class)
+    val sectionMetadata: StateFlow<Map<String, SectionMetadataRow>> = combine(
+        _selectedImageFilter,
+        _selectedVideoFilter,
+        _selectedAlbum
+    ) { imgExt, vidRes, albumId ->
+        Triple(imgExt, vidRes, albumId)
+    }.flatMapLatest { (imgExt: String?, vidRes: String?, albumId: String?) ->
+        val mimeFilter = when {
+            imgExt != null -> "image/${imgExt.lowercase()}"
+            vidRes != null -> "video/%"
+            else -> "%"
+        }
+        val (minW, minH) = when(vidRes) {
+            "4K" -> 3840 to 2160
+            "2K" -> 2560 to 1440
+            "1080P" -> 1920 to 1080
+            "720P" -> 1280 to 720
+            else -> 0 to 0
+        }
+        repository.getAllSectionsMetadata("LOCAL", mimeFilter, albumId, minW, minH)
+            .map { list: List<SectionMetadataRow> ->
+                list.associateBy { row: SectionMetadataRow ->
+                    try {
+                        val parts = row.period.split("-")
+                        val month = parts[0].toInt()
+                        val year = parts[1]
+                        val monthName = java.text.DateFormatSymbols(Locale("es", "ES")).months[month - 1]
+                        "$monthName $year"
+                    } catch (e: Exception) {
+                        row.period
+                    }
+                }
+            }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     val pagedItems: Flow<PagingData<GalleryUiModel>> = combine(
         _selectedFilter,
         _selectedImageFilter,
@@ -220,8 +257,10 @@ class GalleryViewModel @Inject constructor(
 
     fun changeColumns() {
         _columnCount.value = when (_columnCount.value) {
+            3 -> 4
             4 -> 5
             5 -> 6
+            6 -> 3
             else -> 4
         }
     }

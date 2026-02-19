@@ -51,6 +51,37 @@ interface MediaDao {
 
     @Query("DELETE FROM media_items")
     suspend fun clearAll()
+    @Query("""
+        SELECT 
+            strftime('%m-%Y', datetime(dateAdded/1000, 'unixepoch')) as period,
+            COUNT(*) as total,
+            SUM(CASE WHEN mimeType LIKE 'image/%' THEN 1 ELSE 0 END) as images,
+            SUM(CASE WHEN mimeType LIKE 'video/%' THEN 1 ELSE 0 END) as videos
+        FROM media_items 
+        WHERE source = :source 
+        AND mimeType LIKE :mimeType 
+        AND (
+            (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
+        )
+        AND (:albumId IS NULL OR albumId = :albumId)
+        GROUP BY period
+    """)
+    fun getAllSectionsMetadata(
+        source: String, 
+        mimeType: String,
+        albumId: String? = null,
+        minWidth: Int = 0,
+        minHeight: Int = 0
+    ): Flow<List<SectionMetadataRow>>
 }
+
+data class SectionMetadataRow(
+    val period: String, // format "MM-YYYY"
+    val total: Int, 
+    val images: Int, 
+    val videos: Int
+)
+
+data class SectionMetadata(val total: Int, val images: Int, val videos: Int)
 
 data class MediaResolution(val width: Int, val height: Int)

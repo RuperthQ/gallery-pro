@@ -58,6 +58,24 @@ fun HeaderLayout(
                         .size(GalleryDesign.IconSizeAction)
                         .clip(GalleryDesign.CardShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .clickable { viewModel.changeColumns() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.GridView,
+                        contentDescription = "Cambiar Columnas",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(GalleryDesign.IconSizeNormal)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
+
+                Box(
+                    modifier = Modifier
+                        .size(GalleryDesign.IconSizeAction)
+                        .clip(GalleryDesign.CardShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                         .clickable { viewModel.toggleFilters() },
                     contentAlignment = Alignment.Center
                 ) {

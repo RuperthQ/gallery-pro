@@ -2,7 +2,9 @@ package com.my_gallery.data.repository
 
 import android.content.ContentUris
 import android.content.Context
+import android.os.Build
 import android.provider.MediaStore
+import androidx.annotation.RequiresApi
 import androidx.paging.PagingSource
 import com.my_gallery.data.local.dao.MediaDao
 import com.my_gallery.data.local.entity.MediaEntity
@@ -136,7 +138,6 @@ class MediaRepository @Inject constructor(
                     }
                 }
                 
-                // Limpiamos la caché local antes de re-sincronizar para evitar duplicados persistentes
                 mediaDao.clearBySource("LOCAL")
                 
                 if (allEntities.isNotEmpty()) {
@@ -148,10 +149,6 @@ class MediaRepository @Inject constructor(
         }
     }
 
-
-    /**
-     * Obtiene el PagingSource desde Room con soporte para filtros de fecha, tipo y resolución.
-     */
     fun getPagedItems(
         source: String, 
         start: Long, 
@@ -170,22 +167,28 @@ class MediaRepository @Inject constructor(
         return mediaDao.pagingSourceAdvanced(source, start, end, searchMime, albumId, minWidth, minHeight)
     }
 
-    /**
-     * Obtiene todos los MIME types únicos.
-     */
     fun getDistinctMimeTypes(source: String): Flow<List<String>> = mediaDao.getDistinctMimeTypes(source)
 
-    /**
-     * Obtiene resoluciones de video únicas.
-     */
     fun getAvailableVideoResolutions(source: String): Flow<List<com.my_gallery.data.local.dao.MediaResolution>> = 
         mediaDao.getDistinctVideoResolutions(source)
 
-    /**
-     * Renombra un archivo de media.
-     * Si es local, intenta actualizar el MediaStore.
-     * Siempre actualiza la base de datos local (Room).
-     */
+    fun getAllSectionsMetadata(
+        source: String, 
+        mimeType: String?,
+        albumId: String? = null,
+        minWidth: Int = 0,
+        minHeight: Int = 0
+    ): Flow<List<com.my_gallery.data.local.dao.SectionMetadataRow>> {
+        val searchMime = when {
+            mimeType == null || mimeType == "%" || mimeType == "Todas" -> "%"
+            mimeType.startsWith("image/") || mimeType.startsWith("video/") -> "$mimeType%"
+            !mimeType.contains("/") -> "%${mimeType.lowercase()}%"
+            else -> mimeType
+        }
+        return mediaDao.getAllSectionsMetadata(source, searchMime, albumId, minWidth, minHeight)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
     suspend fun renameMedia(item: MediaItem, newNameWithExt: String): RenameResult = withContext(Dispatchers.IO) {
         try {
             if (item.source == "LOCAL") {
@@ -194,25 +197,20 @@ class MediaRepository @Inject constructor(
                 } else true
 
                 if (isManager && item.path != null) {
-                    // MODO PRO: Renombrado directo vía File (100% Silencioso)
                     val oldFile = java.io.File(item.path)
                     val newFile = java.io.File(oldFile.parent, newNameWithExt)
                     
                     if (oldFile.exists() && oldFile.renameTo(newFile)) {
-                        // Notificar al MediaStore para que se entere del cambio físico
                         val values = android.content.ContentValues().apply {
                             put(MediaStore.MediaColumns.DISPLAY_NAME, newNameWithExt)
                             put(MediaStore.MediaColumns.DATA, newFile.absolutePath)
                         }
                         context.contentResolver.update(android.net.Uri.parse(item.url), values, null, null)
-                        
-                        // Escaneo forzado para asegurar que MediaStore se actualice
                         android.media.MediaScannerConnection.scanFile(context, arrayOf(newFile.absolutePath), null, null)
                     } else {
                         throw Exception("No se pudo renombrar el archivo físico")
                     }
                 } else {
-                    // MODO NORMAL: Vía MediaStore (Podría pedir permiso individual)
                     val contentUri = android.net.Uri.parse(item.url)
                     val values = android.content.ContentValues().apply {
                         put(MediaStore.MediaColumns.DISPLAY_NAME, newNameWithExt)
@@ -236,9 +234,6 @@ class MediaRepository @Inject constructor(
         }
     }
 
-    /**
-     * Limpia la caché local de Room.
-     */
     suspend fun clearCache() {
         mediaDao.clearAll()
     }

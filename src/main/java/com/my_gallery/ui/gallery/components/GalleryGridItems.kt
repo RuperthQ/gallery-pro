@@ -35,23 +35,76 @@ import com.my_gallery.ui.components.shimmerEffect
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandLess
+import com.my_gallery.data.local.dao.SectionMetadataRow
+
 @Composable
-fun SectionHeader(label: String) {
-    Box(
+fun SectionHeader(
+    label: String,
+    metadata: SectionMetadataRow? = null
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+    
+    Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { isExpanded = !isExpanded }
             .padding(
                 top = GalleryDesign.PaddingSmall,
                 bottom = GalleryDesign.PaddingSmall,
-                start = GalleryDesign.PaddingSmall
+                start = GalleryDesign.PaddingMedium
             )
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = if (metadata != null) "$label (${metadata.total})" else label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ChevronRight,
+                contentDescription = "Detalles",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(end = GalleryDesign.PaddingLarge)
+                    .size(GalleryDesign.IconSizeSmall)
+            )
+        }
+        
+        AnimatedVisibility(
+            visible = isExpanded && metadata != null,
+            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+        ) {
+            val details = remember(metadata) {
+                val imgs = metadata?.images ?: 0
+                val vids = metadata?.videos ?: 0
+                buildString {
+                    if (imgs > 0) append("$imgs imágenes")
+                    if (imgs > 0 && vids > 0) append(" | ")
+                    if (vids > 0) append("$vids videos")
+                }
+            }
+
+            Text(
+                text = details,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                modifier = Modifier.padding(top = GalleryDesign.PaddingTiny)
+            )
+        }
     }
 }
 

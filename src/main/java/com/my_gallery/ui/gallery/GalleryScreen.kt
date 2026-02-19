@@ -143,7 +143,13 @@ fun GalleryScreen(
             ) { index ->
                 items[index]?.let { model ->
                     when (model) {
-                        is GalleryUiModel.Separator -> SectionHeader(model.dateLabel)
+                        is GalleryUiModel.Separator -> {
+                            val metadata by viewModel.sectionMetadata.collectAsStateWithLifecycle()
+                            SectionHeader(
+                                label = model.dateLabel,
+                                metadata = metadata[model.dateLabel]
+                            )
+                        }
                         is GalleryUiModel.Media -> {
                             GalleryItem(
                                 item = model.item,
@@ -166,18 +172,8 @@ fun GalleryScreen(
                         .padding(GalleryDesign.PaddingLarge),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (items.itemCount > 0) {
-                        if (items.loadState.append is LoadState.Loading) {
-                            CircularProgressIndicator(modifier = Modifier.size(GalleryDesign.IconSizeNormal))
-                        } else {
-                            Text("No hay más elementos", 
-                                style = MaterialTheme.typography.bodySmall, 
-                                color = Color.Gray)
-                        }
-                    } else if (items.loadState.refresh !is LoadState.Loading) {
-                        Text("Verifica los filtros", 
-                            style = MaterialTheme.typography.bodySmall, 
-                            color = Color.Gray)
+                    if (items.loadState.append is LoadState.Loading) {
+                        CircularProgressIndicator(modifier = Modifier.size(GalleryDesign.IconSizeNormal))
                     }
                 }
             }

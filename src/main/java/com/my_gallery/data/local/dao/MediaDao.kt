@@ -34,6 +34,26 @@ interface MediaDao {
         minHeight: Int = 0
     ): PagingSource<Int, MediaEntity>
 
+    @Query("""
+        SELECT id FROM media_items 
+        WHERE source = :source 
+        AND dateAdded >= :start AND dateAdded < :end 
+        AND mimeType LIKE :mimeType 
+        AND (
+            (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
+        )
+        AND (:albumId IS NULL OR albumId = :albumId)
+    """)
+    suspend fun getMediaIds(
+        source: String, 
+        start: Long, 
+        end: Long, 
+        mimeType: String, 
+        albumId: String? = null,
+        minWidth: Int = 0,
+        minHeight: Int = 0
+    ): List<String>
+
     @Query("SELECT DISTINCT mimeType FROM media_items WHERE source = :source")
     fun getDistinctMimeTypes(source: String): Flow<List<String>>
 
@@ -46,11 +66,17 @@ interface MediaDao {
     @Query("UPDATE media_items SET title = :title WHERE id = :id")
     suspend fun updateTitle(id: String, title: String)
 
+    @Query("UPDATE media_items SET path = :newPath, albumId = :newAlbumId WHERE id = :id")
+    suspend fun updatePathAndAlbum(id: String, newPath: String, newAlbumId: String)
+
     @Query("DELETE FROM media_items WHERE source = :source")
     suspend fun clearBySource(source: String)
 
     @Query("DELETE FROM media_items")
     suspend fun clearAll()
+
+    @Query("DELETE FROM media_items WHERE id = :id")
+    suspend fun deleteById(id: String)
     @Query("""
         SELECT 
             strftime('%m-%Y', datetime(dateAdded/1000, 'unixepoch')) as period,

@@ -7,15 +7,29 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.my_gallery.ui.gallery.GalleryViewModel
+import com.my_gallery.ui.gallery.header_actions.HeaderAction
+import com.my_gallery.ui.gallery.header_actions.HeaderActionsOrchestrator
+import com.my_gallery.ui.gallery.filters.FilterOrchestrator
+import com.my_gallery.ui.gallery.filters.GalleryFilter
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 
@@ -44,49 +58,9 @@ fun HeaderLayout(
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Text(
-                    text = "Archivos locales",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium
-                )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(GalleryDesign.IconSizeAction)
-                        .clip(GalleryDesign.CardShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .clickable { viewModel.changeColumns() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.GridView,
-                        contentDescription = "Cambiar Columnas",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(GalleryDesign.IconSizeNormal)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
-
-                Box(
-                    modifier = Modifier
-                        .size(GalleryDesign.IconSizeAction)
-                        .clip(GalleryDesign.CardShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .clickable { viewModel.toggleFilters() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (showFilters) Icons.Default.ExpandLess else Icons.Default.FilterList,
-                        contentDescription = "Filtros",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(GalleryDesign.IconSizeNormal)
-                    )
-                }
-            }
+            HeaderActionsRow(viewModel, showFilters)
         }
 
         AnimatedVisibility(
@@ -100,142 +74,90 @@ fun HeaderLayout(
 }
 
 @Composable
-fun FilterSection(
-    label: String,
-    viewModel: GalleryViewModel,
-    content: @Composable () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = GalleryDesign.PaddingTiny)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = GalleryDesign.PaddingLarge),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+fun HeaderActionsRow(viewModel: GalleryViewModel, showFilters: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
+        val selectedItems by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
+
+        if (isSelectionMode) {
+            SelectionModeActions(viewModel, selectedItems.size)
+        } else {
+            NormalModeActions(viewModel, showFilters)
+        }
+    }
+}
+
+@Composable
+fun SelectionModeActions(viewModel: GalleryViewModel, selectedCount: Int) {
+    val isAlbumCreationPending by viewModel.isAlbumCreationPending.collectAsStateWithLifecycle()
+    val orchestrator = remember(viewModel) { HeaderActionsOrchestrator(viewModel) }
+    
+    // Counter
+    Text(
+        text = "$selectedCount sel.",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(end = GalleryDesign.PaddingSmall)
+    )
+
+    // Main Actions
+    Row(horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall)) {
+        val actions = orchestrator.getSelectionActions(isAlbumCreationPending, selectedCount)
+        actions.forEach { action ->
+            val tint = if (action.description == "Eliminar") MaterialTheme.colorScheme.error 
+                      else if (action.description == "Mover") MaterialTheme.colorScheme.tertiary
+                      else MaterialTheme.colorScheme.primary
+            
+            val bg = tint.copy(alpha = 0.2f)
+            
+            HeaderActionButton(
+                action = action,
+                tint = tint,
+                backgroundColor = bg
             )
-            Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
-            HorizontalDivider(
-                modifier = Modifier.weight(1f),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-            )
         }
-        content()
+    }
+
+    Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
+
+    // Cancel Action
+    HeaderActionButton(
+        action = orchestrator.getCancelAction(),
+        tint = MaterialTheme.colorScheme.error,
+        backgroundColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+    )
+}
+
+@Composable
+fun NormalModeActions(viewModel: GalleryViewModel, showFilters: Boolean) {
+    val orchestrator = remember(viewModel) { HeaderActionsOrchestrator(viewModel) }
+    val actions = orchestrator.getNormalActions(showFilters)
+
+    actions.forEachIndexed { index, action ->
+        if (index > 0) Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
+        HeaderActionButton(action)
     }
 }
 
 @Composable
-fun FilterRow(viewModel: GalleryViewModel) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = GalleryDesign.PaddingSmall)
-    ) {
-        FilterSection(label = "FECHA", viewModel = viewModel) {
-            val filters by viewModel.availableFilters.collectAsStateWithLifecycle()
-            val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
-
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = GalleryDesign.PaddingLarge),
-                horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall),
-                modifier = Modifier.padding(vertical = GalleryDesign.PaddingSmall)
-            ) {
-                items(filters) { filter ->
-                    GalleryFilterChip(
-                        label = filter,
-                        isSelected = filter == (selectedFilter ?: "Todos"),
-                        onClick = { viewModel.onFilterSelected(filter) }
-                    )
-                }
-            }
-        }
-
-        ImageFilterRow(viewModel)
-        VideoFilterRow(viewModel)
-    }
-}
-
-@Composable
-fun ImageFilterRow(viewModel: GalleryViewModel) {
-    val extensions by viewModel.availableImageExtensions.collectAsStateWithLifecycle()
-    val selectedMime by viewModel.selectedImageFilter.collectAsStateWithLifecycle()
-
-    if (extensions.isNotEmpty()) {
-        FilterSection(label = "FOTOS", viewModel = viewModel) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = GalleryDesign.PaddingLarge),
-                horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall),
-                modifier = Modifier.padding(vertical = GalleryDesign.PaddingSmall)
-            ) {
-                items(extensions) { ext ->
-                    GalleryFilterChip(
-                        label = ext,
-                        isSelected = (ext == "Todas" && selectedMime == null) || (ext == selectedMime),
-                        onClick = { viewModel.onImageFilterSelected(ext) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun VideoFilterRow(viewModel: GalleryViewModel) {
-    val resolutions by viewModel.availableVideoResolutions.collectAsStateWithLifecycle()
-    val selectedVideoFilter by viewModel.selectedVideoFilter.collectAsStateWithLifecycle()
-
-    if (resolutions.isNotEmpty()) {
-        FilterSection(label = "VIDEOS", viewModel = viewModel) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = GalleryDesign.PaddingLarge),
-                horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall),
-                modifier = Modifier.padding(vertical = GalleryDesign.PaddingSmall)
-            ) {
-                items(resolutions) { res ->
-                    GalleryFilterChip(
-                        label = res,
-                        isSelected = (res == "Todas" && selectedVideoFilter == null) || (res == selectedVideoFilter),
-                        onClick = { viewModel.onVideoFilterSelected(res) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun GalleryFilterChip(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
+fun HeaderActionButton(
+    action: HeaderAction,
+    tint: Color = MaterialTheme.colorScheme.primary,
+    backgroundColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
 ) {
     Box(
         modifier = Modifier
-            .height(GalleryDesign.ButtonHeight)
-            .premiumBorder(
-                shape = GalleryDesign.FilterShape,
-                width = if (isSelected) GalleryDesign.BorderWidthBold else GalleryDesign.BorderWidthThin,
-                alpha = if (isSelected) 1f else 0.3f
-            )
-            .clip(GalleryDesign.FilterShape)
-            .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = GalleryDesign.PaddingMedium),
+            .size(GalleryDesign.IconSizeAction)
+            .clip(GalleryDesign.CardShape)
+            .background(backgroundColor)
+            .clickable(onClick = action.onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+        Icon(
+            imageVector = action.icon,
+            contentDescription = action.description,
+            tint = tint,
+            modifier = Modifier.size(GalleryDesign.IconSizeNormal)
         )
     }
 }

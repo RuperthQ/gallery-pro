@@ -21,6 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayCircle
@@ -256,7 +257,7 @@ fun MediaViewerScreen(
                         contentColor = Color.White,
                         modifier = Modifier.align(Alignment.CenterStart),
                         shape = GalleryDesign.CardShape
-                    ) { Icon(Icons.Default.ArrowBack, "Cerrar") }
+                    ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cerrar") }
 
                     val currentItem = (items[pagerState.currentPage] as? GalleryUiModel.Media)?.item
                     if (currentItem != null) {

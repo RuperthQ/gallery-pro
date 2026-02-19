@@ -1,17 +1,41 @@
 package com.my_gallery.ui.gallery
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -26,7 +50,17 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.my_gallery.domain.model.MediaItem
-import com.my_gallery.ui.gallery.components.*
+import com.my_gallery.ui.gallery.components.CreateAlbumDialog
+import com.my_gallery.ui.gallery.components.DeleteConfirmationDialog
+import com.my_gallery.ui.gallery.components.GalleryItem
+import com.my_gallery.ui.gallery.components.GalleryPlaceholder
+import com.my_gallery.ui.gallery.components.HeaderLayout
+import com.my_gallery.ui.gallery.components.LoadingOverlay
+import com.my_gallery.ui.gallery.components.MetadataSheetContent
+import com.my_gallery.ui.gallery.components.MoveToAlbumDialog
+import com.my_gallery.ui.gallery.components.PermissionBanner
+import com.my_gallery.ui.gallery.components.PremiumAlbumCarousel
+import com.my_gallery.ui.gallery.components.SectionHeader
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.glassBackground
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
@@ -46,9 +80,24 @@ fun GalleryScreen(
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val selectedAlbum by viewModel.selectedAlbum.collectAsStateWithLifecycle()
     
+    val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
+    val selectedMediaIds by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
+    val showCreateAlbumDialog by viewModel.showCreateAlbumDialog.collectAsStateWithLifecycle()
+    val isMovingMedia by viewModel.isMovingMedia.collectAsStateWithLifecycle()
+    
     val items: LazyPagingItems<GalleryUiModel> =
         viewModel.pagedItems.collectAsLazyPagingItems()
     val animatedColumns by animateIntAsState(targetValue = columnCount, label = "columnAnim")
+
+    val intentSenderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.onPermissionResult(true)
+        } else {
+            viewModel.onPermissionResult(false)
+        }
+    }
 
     val sheetState = rememberModalBottomSheetState()
 
@@ -75,13 +124,8 @@ fun GalleryScreen(
 
     LaunchedEffect(pendingIntent) {
         pendingIntent?.let { intentSender ->
-            val activity = context as? androidx.activity.ComponentActivity
-            activity?.startIntentSenderForResult(
-                intentSender, 
-                1001, 
-                null, 0, 0, 0
-            )
-            viewModel.clearPendingIntent()
+            val request = IntentSenderRequest.Builder(intentSender).build()
+            intentSenderLauncher.launch(request)
         }
     }
 
@@ -145,20 +189,37 @@ fun GalleryScreen(
                     when (model) {
                         is GalleryUiModel.Separator -> {
                             val metadata by viewModel.sectionMetadata.collectAsStateWithLifecycle()
+                            val isChecked = remember(selectedMediaIds, model.dateLabel) {
+                                viewModel.isGroupSelected(model.dateLabel, selectedMediaIds)
+                            }
+                            // Pass metadata to header
                             SectionHeader(
                                 label = model.dateLabel,
-                                metadata = metadata[model.dateLabel]
+                                metadata = metadata[model.dateLabel],
+                                isChecked = isChecked,
+                                onToggleCheck = { viewModel.toggleGroupSelection(model.dateLabel) }
                             )
                         }
                         is GalleryUiModel.Media -> {
                             GalleryItem(
                                 item = model.item,
+                                isSelectionMode = isSelectionMode,
+                                isSelected = selectedMediaIds.contains(model.item.id),
                                 onClick = { viewModel.openViewer(model.item, index) },
-                                onLongClick = { viewModel.selectItem(model.item) }
+                                onLongClick = { viewModel.selectItem(model.item) },
+                                onToggleSelection = { viewModel.toggleMediaSelection(model.item.id) }
                             )
                         }
                     }
                 }
+            }
+
+            if (items.itemCount == 0 && items.loadState.refresh is LoadState.NotLoading) {
+                 item(span = { GridItemSpan(maxLineSpan) }) {
+                    Box(Modifier.fillMaxWidth().padding(GalleryDesign.PaddingLarge), contentAlignment = Alignment.Center) {
+                        Text("No hay elementos para mostrar", color = Color.Gray)
+                    }
+                 }
             }
 
             if (items.loadState.refresh is LoadState.Loading) {
@@ -237,6 +298,39 @@ fun GalleryScreen(
                     onShowMetadata = { viewModel.selectItem(currentItem) }
                 )
             }
+        }
+
+        // --- Diálogos de Álbum y Overlays ---
+        if (showCreateAlbumDialog) {
+            CreateAlbumDialog(
+                viewModel = viewModel,
+                onDismiss = { viewModel.hideCreateAlbumDialog() }
+            )
+        }
+
+        val showMoveToAlbumDialog by viewModel.showMoveToAlbumDialog.collectAsStateWithLifecycle()
+        if (showMoveToAlbumDialog) {
+            MoveToAlbumDialog(
+                albums = albums,
+                viewModel = viewModel,
+                onDismiss = { viewModel.hideMoveToAlbumDialog() }
+            )
+        }
+
+        val showDeleteConfirmation by viewModel.showDeleteConfirmation.collectAsStateWithLifecycle()
+        if (showDeleteConfirmation) {
+            DeleteConfirmationDialog(
+                count = selectedMediaIds.size,
+                onConfirm = { 
+                    viewModel.hideDeleteConfirmation()
+                    viewModel.deleteSelectedMedia()
+                },
+                onDismiss = { viewModel.hideDeleteConfirmation() }
+            )
+        }
+
+        if (isMovingMedia) {
+            LoadingOverlay(message = "Moviendo archivos...")
         }
     }
 }

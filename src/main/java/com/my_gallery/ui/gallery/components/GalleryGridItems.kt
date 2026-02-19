@@ -1,16 +1,26 @@
 package com.my_gallery.ui.gallery.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -30,23 +40,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.my_gallery.data.local.dao.SectionMetadataRow
 import com.my_gallery.domain.model.MediaItem
 import com.my_gallery.ui.components.shimmerEffect
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.ExpandLess
-import com.my_gallery.data.local.dao.SectionMetadataRow
-
 @Composable
 fun SectionHeader(
     label: String,
-    metadata: SectionMetadataRow? = null
+    metadata: SectionMetadataRow? = null,
+    isChecked: Boolean? = false,
+    onToggleCheck: (() -> Unit)? = null
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     
@@ -64,6 +69,19 @@ fun SectionHeader(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
+            // Selection Checkbox
+            if (onToggleCheck != null) {
+                Icon(
+                    imageVector = if (isChecked == true) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = "Seleccionar grupo",
+                    tint = if (isChecked == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .padding(end = GalleryDesign.PaddingSmall)
+                        .size(GalleryDesign.IconSizeSmall)
+                        .clickable { onToggleCheck() }
+                )
+            }
+
             Text(
                 text = if (metadata != null) "$label (${metadata.total})" else label,
                 style = MaterialTheme.typography.titleMedium,
@@ -102,7 +120,7 @@ fun SectionHeader(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                modifier = Modifier.padding(top = GalleryDesign.PaddingTiny)
+                modifier = Modifier.padding(start = if (onToggleCheck != null) GalleryDesign.PaddingLarge + GalleryDesign.IconSizeSmall + GalleryDesign.PaddingSmall else GalleryDesign.PaddingMedium, top = GalleryDesign.PaddingTiny)
             )
         }
     }
@@ -112,8 +130,11 @@ fun SectionHeader(
 @Composable
 fun GalleryItem(
     item: MediaItem,
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    onToggleSelection: () -> Unit
 ) {
     val context = LocalContext.current
     var isLoaded by remember { mutableStateOf(false) }
@@ -132,9 +153,13 @@ fun GalleryItem(
         modifier = Modifier
             .aspectRatio(1f)
             .clip(GalleryDesign.CardShape)
-            .premiumBorder(shape = GalleryDesign.CardShape)
+            .premiumBorder(
+                shape = GalleryDesign.CardShape,
+                width = if (isSelected) GalleryDesign.BorderWidthBold else GalleryDesign.BorderWidthThin,
+                alpha = if (isSelected) 1f else 0.5f
+            )
             .combinedClickable(
-                onClick = onClick,
+                onClick = { if (isSelectionMode) onToggleSelection() else onClick() },
                 onLongClick = onLongClick
             ),
         shape = GalleryDesign.CardShape,
@@ -156,6 +181,28 @@ fun GalleryItem(
                     }
                 }
             )
+
+            // Overlay de selección
+            if (isSelectionMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            else Color.Transparent
+                        )
+                ) {
+                    Icon(
+                        imageVector = if (isSelected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                        contentDescription = null,
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(GalleryDesign.PaddingSmall)
+                            .size(GalleryDesign.IconSizeNormal)
+                    )
+                }
+            }
 
             if (item.mimeType.startsWith("video")) {
                 Box(

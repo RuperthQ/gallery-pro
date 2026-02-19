@@ -11,6 +11,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 import android.app.Application
+import android.os.Build
+import androidx.annotation.RequiresApi
 import com.my_gallery.data.repository.MediaRepository
 import com.my_gallery.data.repository.RenameResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -71,6 +73,156 @@ class GalleryViewModel @Inject constructor(
         _autoplayEnabled.value = !_autoplayEnabled.value
     }
 
+    // --- Modo Selección y Álbumes ---
+    private val _isSelectionMode = MutableStateFlow(false)
+    val isSelectionMode: StateFlow<Boolean> = _isSelectionMode.asStateFlow()
+
+    private val _selectedMediaIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedMediaIds: StateFlow<Set<String>> = _selectedMediaIds.asStateFlow()
+
+    private val _showCreateAlbumDialog = MutableStateFlow(false)
+    val showCreateAlbumDialog: StateFlow<Boolean> = _showCreateAlbumDialog.asStateFlow()
+
+    private val _showMoveToAlbumDialog = MutableStateFlow(false)
+    val showMoveToAlbumDialog: StateFlow<Boolean> = _showMoveToAlbumDialog.asStateFlow()
+
+    fun showMoveToAlbumDialog() {
+        _showMoveToAlbumDialog.value = true
+    }
+
+    fun hideMoveToAlbumDialog() {
+        _showMoveToAlbumDialog.value = false
+    }
+
+    private val _isMovingMedia = MutableStateFlow(false)
+    val isMovingMedia: StateFlow<Boolean> = _isMovingMedia.asStateFlow()
+
+    private val _showDeleteConfirmation = MutableStateFlow(false)
+    val showDeleteConfirmation: StateFlow<Boolean> = _showDeleteConfirmation.asStateFlow()
+
+    fun showDeleteConfirmation() {
+        _showDeleteConfirmation.value = true
+    }
+
+    fun hideDeleteConfirmation() {
+        _showDeleteConfirmation.value = false
+    }
+
+    private var targetAlbumName: String? = null
+
+    fun toggleSelectionMode() {
+        _isSelectionMode.value = !_isSelectionMode.value
+        if (!_isSelectionMode.value) {
+            _selectedMediaIds.value = emptySet()
+            _isAlbumCreationPending.value = false
+            targetAlbumName = null
+        }
+    }
+
+    fun toggleMediaSelection(mediaId: String) {
+        val current = _selectedMediaIds.value.toMutableSet()
+        if (current.contains(mediaId)) current.remove(mediaId) else current.add(mediaId)
+        _selectedMediaIds.value = current
+    }
+
+    fun showCreateAlbumDialog() {
+        _showCreateAlbumDialog.value = true
+    }
+
+    fun hideCreateAlbumDialog() {
+        _showCreateAlbumDialog.value = false
+    }
+
+    private val _allPagingItems = mutableListOf<MediaItem>()
+    // Nota: Para obtener los items reales seleccionados, los buscaremos por ID. 
+    // En una implementación real con Paging, esto puede ser complejo si no están cargados.
+    // Usaremos un truco: registrar los items que pasan por el DataSource o mantener una lista paralela.
+
+    private val _isAlbumCreationPending = MutableStateFlow(false)
+    val isAlbumCreationPending: StateFlow<Boolean> = _isAlbumCreationPending.asStateFlow()
+
+    fun startAlbumCreation(name: String) {
+        targetAlbumName = name
+        _showCreateAlbumDialog.value = false
+        _isSelectionMode.value = true
+        _isAlbumCreationPending.value = true
+        _selectedMediaIds.value = emptySet()
+
+        // Insertar álbum temporalmente en el carrusel después del primer elemento (Todo)
+        val currentAlbums = _albums.value.toMutableList()
+        val tempAlbum = AlbumItem(
+            id = "TEMP_ALBUM_${System.currentTimeMillis()}",
+            name = name,
+            thumbnail = "", // Sin miniatura hasta que se mueva algo
+            count = 0
+        )
+        if (currentAlbums.size > 1) {
+            currentAlbums.add(1, tempAlbum)
+        } else {
+            currentAlbums.add(tempAlbum)
+        }
+        _albums.value = currentAlbums
+    }
+
+    fun saveSelectedToNewAlbum() {
+        val albumName = targetAlbumName ?: return
+        val selectedIds = _selectedMediaIds.value
+        if (selectedIds.isEmpty()) {
+            // Si está vacío, solo creamos el folder
+            viewModelScope.launch {
+                repository.createAlbum(albumName)
+                exitSelection()
+                syncGallery() // Refrescar álbumes
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _isMovingMedia.value = true
+            try {
+                // Necesitamos los objetos MediaItem reales. 
+                val allItems = _allLoadedItems 
+                val toMove = allItems.filter { it.id in selectedIds }
+                
+                val success = repository.moveMediaToAlbum(toMove, albumName)
+                if (success) {
+                    // Refrescar inmediatamente
+                    _selectedMediaIds.value = emptySet()
+                    targetAlbumName = null
+                    _isSelectionMode.value = false
+                    
+                    // Pequeña espera para asegurar que MediaStore se actualice
+                    delay(1000) 
+                    syncGallery()
+                }
+            } finally {
+                _isMovingMedia.value = false
+            }
+        }
+    }
+
+    fun moveSelectedToExistingAlbum(albumName: String) {
+        _showMoveToAlbumDialog.value = false
+        targetAlbumName = albumName
+        saveSelectedToNewAlbum()
+    }
+
+    fun exitSelection() {
+        _isSelectionMode.value = false
+        _isAlbumCreationPending.value = false
+        _selectedMediaIds.value = emptySet()
+        targetAlbumName = null
+    }
+
+    private val _allLoadedItems = mutableListOf<MediaItem>()
+    private fun registerLoadedItem(item: MediaItem) {
+        if (_allLoadedItems.none { it.id == item.id }) {
+            _allLoadedItems.add(item)
+        }
+    }
+
+    // --------------------------------
+
     private val _isEditPermissionGranted = MutableStateFlow(
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             android.provider.MediaStore.canManageMedia(application)
@@ -108,13 +260,19 @@ class GalleryViewModel @Inject constructor(
         viewModelScope.launch {
             delay(500)
             repository.syncLocalGallery()
-            
+            loadAlbums()
+        }
+    }
+
+    private fun loadAlbums() {
+        viewModelScope.launch {
             repository.getLocalAlbums().collect { list ->
+                val totalCount = list.sumOf { it.count }
                 val virtualAll = AlbumItem(
                     id = "ALL_VIRTUAL_ALBUM",
                     name = "Todo",
                     thumbnail = list.firstOrNull()?.thumbnail ?: "",
-                    count = 0
+                    count = totalCount
                 )
                 _albums.value = listOf(virtualAll) + list
             }
@@ -238,7 +396,11 @@ class GalleryViewModel @Inject constructor(
             ),
             pagingSourceFactory = { repository.getPagedItems("LOCAL", startRange, endRange, mimeFilter, albumId, minW, minH) }
         ).flow
-            .map { it.map { item -> GalleryUiModel.Media(item.toDomain()) as GalleryUiModel } }
+            .map { it.map { item -> 
+                val domain = item.toDomain()
+                registerLoadedItem(domain)
+                GalleryUiModel.Media(domain) as GalleryUiModel 
+            } }
             .map { pagingData ->
                 pagingData.insertSeparators { before, after ->
                     if (after == null) return@insertSeparators null
@@ -299,6 +461,8 @@ class GalleryViewModel @Inject constructor(
     fun syncGallery() {
         viewModelScope.launch {
             repository.syncLocalGallery()
+            delay(500) // Small delay to let MediaStore update
+            loadAlbums()
         }
     }
 
@@ -307,6 +471,7 @@ class GalleryViewModel @Inject constructor(
 
     private var pendingRenameData: Pair<MediaItem, String>? = null
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     fun renameMedia(item: MediaItem, newName: String) {
         viewModelScope.launch {
             checkEditPermission()
@@ -334,14 +499,64 @@ class GalleryViewModel @Inject constructor(
         }
     }
 
+    private var pendingDeleteItems: List<MediaItem>? = null
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    fun deleteSelectedMedia() {
+        viewModelScope.launch {
+            val selectedIds = _selectedMediaIds.value
+            val allItems = _allLoadedItems
+            val toDelete = allItems.filter { it.id in selectedIds }
+            
+            if (toDelete.isEmpty()) return@launch
+
+            val result = repository.deleteMedia(toDelete)
+            when (result) {
+                is com.my_gallery.data.repository.DeleteResult.Success -> {
+                    _selectedMediaIds.value = emptySet()
+                    _isSelectionMode.value = false
+                    syncGallery()
+                }
+                is com.my_gallery.data.repository.DeleteResult.PermissionRequired -> {
+                     // For API 30+, this intent performs the delete. We just need to sync after.
+                     // For API < 30, we might need to retry? 
+                     // Actually RecoverableSecurityException usually requires retry.
+                     // Let's assume we store them to retry if needed.
+                     pendingDeleteItems = toDelete 
+                     _pendingIntent.value = result.intentSender
+                }
+                is com.my_gallery.data.repository.DeleteResult.Error -> {
+                    // Handle error (show toast?)
+                }
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
     fun onPermissionResult(success: Boolean) {
         _pendingIntent.value = null
         if (success) {
             pendingRenameData?.let { (item, name) ->
                 renameMedia(item, name)
             }
+            pendingDeleteItems?.let { items ->
+                // If API 30+, delete happened. If < 30, retry.
+                // Simplest is to just call deleteSelectedMedia again (since items are still selected initially?)
+                // But wait, if we call deleteMedia again on items that are already deleted (API 30+), it might fail or do nothing.
+                // Let's just try to sync first. If items are gone, great.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                     _selectedMediaIds.value = emptySet()
+                    _isSelectionMode.value = false
+                    syncGallery()
+                } else {
+                    // Start delete again logic? 
+                    // To keep it simple, we just retry delete.
+                     deleteSelectedMedia()
+                }
+            }
         }
         pendingRenameData = null
+        pendingDeleteItems = null
     }
 
     fun clearPendingIntent() {
@@ -350,6 +565,65 @@ class GalleryViewModel @Inject constructor(
 
     fun closeViewer() {
         _viewerItem.value = null
+    }
+
+    fun toggleGroupSelection(headerLabel: String) {
+        viewModelScope.launch {
+            var start = 0L
+            var end = Long.MAX_VALUE
+            try {
+                dateFormatter.parse(headerLabel)?.let { d ->
+                    val cal = Calendar.getInstance().apply { time = d }
+                    start = cal.timeInMillis
+                    cal.add(Calendar.MONTH, 1)
+                    end = cal.timeInMillis
+                }
+            } catch (e: Exception) { 
+                return@launch 
+            }
+            
+            val imgExt = _selectedImageFilter.value
+            val vidRes = _selectedVideoFilter.value
+            val albumId = _selectedAlbum.value // toggleAlbum sets null for ALL_VIRTUAL_ALBUM, so just use value
+            
+            val source = "LOCAL"
+            
+            val mimeFilter = when {
+                imgExt != null -> "image/${imgExt.lowercase()}"
+                vidRes != null -> "video/%"
+                else -> "%"
+            }
+
+            val (minW, minH) = when(vidRes) {
+                "4K" -> 3840 to 2160
+                "2K" -> 2560 to 1440
+                "1080P" -> 1920 to 1080
+                "720P" -> 1280 to 720
+                else -> 0 to 0
+            }
+
+            val groupIds = repository.getMediaIds(source, start, end, mimeFilter, albumId, minW, minH)
+            
+            val current = _selectedMediaIds.value
+            val allInGroupSelected = groupIds.isNotEmpty() && groupIds.all { it in current }
+            
+            val newSet = current.toMutableSet()
+            if (allInGroupSelected) {
+                 newSet.removeAll(groupIds)
+            } else {
+                 newSet.addAll(groupIds)
+            }
+            
+            _selectedMediaIds.value = newSet
+            if (newSet.isNotEmpty() && !_isSelectionMode.value) {
+                _isSelectionMode.value = true
+            }
+        }
+    }
+    fun isGroupSelected(label: String, selectedIds: Set<String>): Boolean {
+        val inGroup = _allLoadedItems.filter { formatDate(it.dateAdded) == label }
+        if (inGroup.isEmpty()) return false
+        return inGroup.all { it.id in selectedIds }
     }
 }
 

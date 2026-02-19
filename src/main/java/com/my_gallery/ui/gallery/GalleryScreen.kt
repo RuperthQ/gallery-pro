@@ -1,5 +1,6 @@
 package com.my_gallery.ui.gallery
 
+import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +25,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +42,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cloud
@@ -64,6 +70,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,10 +84,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
@@ -110,6 +122,8 @@ fun GalleryScreen(
     val selectedItem by viewModel.selectedItem.collectAsStateWithLifecycle()
     val viewerItem by viewModel.viewerItem.collectAsStateWithLifecycle()
     val viewerIndex by viewModel.viewerIndex.collectAsStateWithLifecycle()
+    val pendingIntent by viewModel.pendingIntent.collectAsStateWithLifecycle()
+    val isEditPermissionGranted by viewModel.isEditPermissionGranted.collectAsStateWithLifecycle()
     
     val items: LazyPagingItems<GalleryUiModel> =
         viewModel.pagedItems.collectAsLazyPagingItems()
@@ -146,6 +160,39 @@ fun GalleryScreen(
         }
     }
 
+    // --- RE-CHECK PERMISSIONS ON RESUME ---
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.checkEditPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val intentSenderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        viewModel.onPermissionResult(result.resultCode == Activity.RESULT_OK)
+    }
+
+    val manageMediaLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { _ ->
+        viewModel.checkEditPermission()
+    }
+
+    LaunchedEffect(pendingIntent) {
+        pendingIntent?.let { sender ->
+            val request = androidx.activity.result.IntentSenderRequest.Builder(sender).build()
+            intentSenderLauncher.launch(request)
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -165,13 +212,31 @@ fun GalleryScreen(
         ) {
             // --- EL TRUCO PRO: Ghost Header (Invisible pero ocupa espacio) ---
             item(span = { GridItemSpan(maxLineSpan) }) {
-                // El "fantasma" tiene exactamente la misma estructura que el real
                 HeaderLayout(
                     currentSource = currentSource,
                     showFilters = showFilters,
                     viewModel = viewModel,
-                    modifier = Modifier.alpha(0f) // Totalmente invisible
+                    modifier = Modifier.alpha(0f)
                 )
+            }
+            
+            // --- BANNER DE PERMISO PRO (Cubre toda la galería) ---
+            if (!isEditPermissionGranted) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    PermissionBanner(
+                        onGrantClick = {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                                val intent = android.content.Intent(
+                                    android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                    android.net.Uri.parse("package:${context.packageName}")
+                                )
+                                manageMediaLauncher.launch(intent)
+                            } else {
+                                viewModel.checkEditPermission()
+                            }
+                        }
+                    )
+                }
             }
 
                 items(
@@ -287,7 +352,7 @@ fun GalleryScreen(
                 shape = GalleryDesign.HeaderShape,
                 dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.primary) }
             ) {
-                MetadataSheetContent(selectedItem!!)
+                MetadataSheetContent(selectedItem!!, viewModel)
             }
         }
 
@@ -674,7 +739,7 @@ fun GalleryPlaceholder() {
 }
 
 @Composable
-fun MetadataSheetContent(item: MediaItem) {
+fun MetadataSheetContent(item: MediaItem, viewModel: GalleryViewModel) {
     val dateFormatter = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
     
     Column(
@@ -684,7 +749,7 @@ fun MetadataSheetContent(item: MediaItem) {
             .navigationBarsPadding()
     ) {
         Text(
-            text = "Detalles de la Media",
+            text = "Detalles",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.primary,
@@ -692,10 +757,11 @@ fun MetadataSheetContent(item: MediaItem) {
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall)) {
-            MetadataItem(
+            MetadataEditItem(
                 icon = Icons.Default.Title,
                 label = "Nombre",
-                value = item.title
+                initialValue = item.title,
+                onSave = { newName -> viewModel.renameMedia(item, newName) }
             )
             MetadataItem(
                 icon = Icons.Default.CalendarMonth,
@@ -725,6 +791,156 @@ fun MetadataSheetContent(item: MediaItem) {
         }
         
         Spacer(modifier = Modifier.height(GalleryDesign.PaddingLarge))
+    }
+}
+
+@Composable
+fun MetadataEditItem(
+    icon: ImageVector,
+    label: String,
+    initialValue: String,
+    onSave: (String) -> Unit
+) {
+    var isEditing by remember { mutableStateOf(false) }
+    
+    // Separamos nombre de extensión para bloquear esta última
+    val lastDotIndex = initialValue.lastIndexOf('.')
+    val namePart = if (lastDotIndex != -1) initialValue.substring(0, lastDotIndex) else initialValue
+    val extPart = if (lastDotIndex != -1) initialValue.substring(lastDotIndex) else ""
+    
+    var textValue by remember(initialValue) { mutableStateOf(namePart) }
+    val hasChanged = textValue != namePart
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(GalleryDesign.CardShape)
+            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f))
+            .padding(GalleryDesign.PaddingMedium),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(GalleryDesign.IconSizeNormal)
+        )
+        Spacer(modifier = Modifier.width(GalleryDesign.PaddingMedium))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+            )
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isEditing) {
+                    BasicTextField(
+                        value = textValue,
+                        onValueChange = { textValue = it },
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.weight(1f, fill = false),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                    )
+                    Text(
+                        text = extPart,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                } else {
+                    Text(
+                        text = initialValue,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
+        IconButton(
+            onClick = {
+                if (isEditing) {
+                    if (hasChanged && textValue.isNotBlank()) {
+                        onSave(textValue)
+                    }
+                    isEditing = false
+                } else {
+                    isEditing = true
+                }
+            }
+        ) {
+            Icon(
+                imageVector = if (isEditing) {
+                    if (hasChanged) Icons.Default.Check else Icons.Default.Close
+                } else {
+                    Icons.Default.Edit
+                },
+                contentDescription = if (isEditing) "Guardar" else "Editar",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(GalleryDesign.IconSizeSmall)
+            )
+        }
+    }
+}
+
+@Composable
+fun PermissionBanner(onGrantClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(GalleryDesign.PaddingMedium)
+            .premiumBorder(shape = GalleryDesign.CardShape),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
+        ),
+        shape = GalleryDesign.CardShape
+    ) {
+        Row(
+            modifier = Modifier.padding(GalleryDesign.PaddingLarge),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(GalleryDesign.IconSizeAction)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SdStorage,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.width(GalleryDesign.PaddingLarge))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Permiso de Edición Pro",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Para renombrar y organizar tu galería sin interrupciones, activa el acceso avanzado.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
+            Button(
+                onClick = onGrantClick,
+                shape = GalleryDesign.FilterShape,
+                contentPadding = PaddingValues(horizontal = GalleryDesign.PaddingMedium),
+                modifier = Modifier.height(GalleryDesign.ButtonHeight)
+            ) {
+                Text("Activar", style = MaterialTheme.typography.labelLarge)
+            }
+        }
     }
 }
 

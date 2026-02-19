@@ -41,6 +41,9 @@ interface MediaDao {
     @Query("SELECT COUNT(*) FROM media_items WHERE source = :source")
     suspend fun countBySource(source: String): Int
 
+    @Query("UPDATE media_items SET title = :title WHERE id = :id")
+    suspend fun updateTitle(id: String, title: String)
+
     @Query("DELETE FROM media_items")
     suspend fun clearAll()
 }

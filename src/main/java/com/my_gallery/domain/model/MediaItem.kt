@@ -24,5 +24,9 @@ data class MediaItem(
     @SerializedName("width")
     val width: Int = 0,
     @SerializedName("height")
-    val height: Int = 0
+    val height: Int = 0,
+    @SerializedName("source")
+    val source: String = "LOCAL",
+    @SerializedName("path")
+    val path: String? = null
 )

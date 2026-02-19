@@ -13,6 +13,7 @@ import javax.inject.Inject
 
 import android.app.Application
 import com.my_gallery.data.repository.MediaRepository
+import com.my_gallery.data.repository.RenameResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 
@@ -58,9 +59,27 @@ class GalleryViewModel @Inject constructor(
         _autoplayEnabled.value = !_autoplayEnabled.value
     }
 
+    private val _isEditPermissionGranted = MutableStateFlow(
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            android.provider.MediaStore.canManageMedia(application)
+        } else true
+    )
+    val isEditPermissionGranted: StateFlow<Boolean> = _isEditPermissionGranted.asStateFlow()
+
+    fun checkEditPermission() {
+        val granted = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            android.os.Environment.isExternalStorageManager()
+        } else {
+            true
+        }
+        android.util.Log.d("GalleryViewModel", "Check All Files permission: $granted")
+        _isEditPermissionGranted.value = granted
+    }
+
     private val dateFormatter = SimpleDateFormat("MMMM yyyy", Locale("es", "ES"))
 
     init {
+        checkEditPermission()
         // Sincronización inteligente: Solo si es necesario
         viewModelScope.launch {
             // Un pequeño delay para que la UI termine su primer render sin estrés
@@ -224,6 +243,54 @@ class GalleryViewModel @Inject constructor(
             repository.syncCloudGallery()
             repository.syncLocalGallery()
         }
+    }
+
+    private val _pendingIntent = MutableStateFlow<android.content.IntentSender?>(null)
+    val pendingIntent: StateFlow<android.content.IntentSender?> = _pendingIntent.asStateFlow()
+
+    private var pendingRenameData: Pair<MediaItem, String>? = null
+
+    fun renameMedia(item: MediaItem, newName: String) {
+        viewModelScope.launch {
+            checkEditPermission()
+            
+            val lastDotIndex = item.title.lastIndexOf('.')
+            val extension = if (lastDotIndex != -1) item.title.substring(lastDotIndex) else ""
+            val cleanedNewName = newName.removeSuffix(extension).removeSuffix(".")
+            val fullNewName = "$cleanedNewName$extension"
+            
+            when (val result = repository.renameMedia(item, fullNewName)) {
+                is RenameResult.Success -> {
+                    val updated = item.copy(title = fullNewName)
+                    _selectedItem.value = updated
+                    if (_viewerItem.value?.id == item.id) _viewerItem.value = updated
+                    pendingRenameData = null // Limpiar si fue exitoso
+                }
+                is RenameResult.PermissionRequired -> {
+                    // Guardamos para el reintento automático
+                    pendingRenameData = item to newName // Guardamos el nombre original solicitado
+                    _pendingIntent.value = result.intentSender
+                }
+                is RenameResult.Error -> {
+                    pendingRenameData = null
+                    // TODO: Error UI feedback
+                }
+            }
+        }
+    }
+
+    fun onPermissionResult(success: Boolean) {
+        _pendingIntent.value = null
+        if (success) {
+            pendingRenameData?.let { (item, name) ->
+                renameMedia(item, name)
+            }
+        }
+        pendingRenameData = null
+    }
+
+    fun onIntentLaunched() {
+        // Obsoleto, usar onPermissionResult
     }
 
     fun closeViewer() {

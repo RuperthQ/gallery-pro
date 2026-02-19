@@ -17,7 +17,8 @@ data class MediaEntity(
     val size: Long = 0,
     val width: Int = 0,
     val height: Int = 0,
-    val source: String = "LOCAL"
+    val source: String = "LOCAL",
+    val path: String? = null
 ) {
     fun toDomain() = MediaItem(
         id = id,
@@ -28,7 +29,9 @@ data class MediaEntity(
         mimeType = mimeType,
         size = size,
         width = width,
-        height = height
+        height = height,
+        source = source,
+        path = path
     )
 
     companion object {
@@ -42,7 +45,8 @@ data class MediaEntity(
             size = domain.size,
             width = domain.width,
             height = domain.height,
-            source = source
+            source = source,
+            path = domain.path
         )
     }
 }

@@ -6,6 +6,7 @@ import android.provider.MediaStore
 import androidx.paging.PagingSource
 import com.my_gallery.data.local.dao.MediaDao
 import com.my_gallery.data.local.entity.MediaEntity
+import com.my_gallery.domain.model.MediaItem
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -47,7 +48,8 @@ class MediaRepository @Inject constructor(
                             MediaStore.MediaColumns.MIME_TYPE,
                             MediaStore.MediaColumns.SIZE,
                             MediaStore.MediaColumns.WIDTH,
-                            MediaStore.MediaColumns.HEIGHT
+                            MediaStore.MediaColumns.HEIGHT,
+                            MediaStore.MediaColumns.DATA
                         ), 
                         null, null,
                         "${MediaStore.MediaColumns.DATE_ADDED} DESC"
@@ -61,10 +63,13 @@ class MediaRepository @Inject constructor(
                         val sizeCol = it.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
                         val widthCol = it.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
                         val heightCol = it.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
+                        val dataCol = it.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA)
 
                         while (it.moveToNext()) {
                             val id = it.getLong(idCol)
                             val contentUri = ContentUris.withAppendedId(uri, id).toString()
+                            val absolutePath = it.getString(dataCol)
+                            
                             allEntities.add(MediaEntity(
                                 id = "${typePrefix}_$id",
                                 url = contentUri,
@@ -75,7 +80,8 @@ class MediaRepository @Inject constructor(
                                 size = it.getLong(sizeCol),
                                 width = it.getInt(widthCol),
                                 height = it.getInt(heightCol),
-                                source = "LOCAL"
+                                source = "LOCAL",
+                                path = absolutePath
                             ))
                         }
                     }
@@ -147,9 +153,70 @@ class MediaRepository @Inject constructor(
         mediaDao.getDistinctVideoResolutions(source)
 
     /**
+     * Renombra un archivo de media.
+     * Si es local, intenta actualizar el MediaStore.
+     * Siempre actualiza la base de datos local (Room).
+     */
+    suspend fun renameMedia(item: MediaItem, newNameWithExt: String): RenameResult = withContext(Dispatchers.IO) {
+        try {
+            if (item.source == "LOCAL") {
+                val isManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    android.os.Environment.isExternalStorageManager()
+                } else true
+
+                if (isManager && item.path != null) {
+                    // MODO PRO: Renombrado directo vía File (100% Silencioso)
+                    val oldFile = java.io.File(item.path)
+                    val newFile = java.io.File(oldFile.parent, newNameWithExt)
+                    
+                    if (oldFile.exists() && oldFile.renameTo(newFile)) {
+                        // Notificar al MediaStore para que se entere del cambio físico
+                        val values = android.content.ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, newNameWithExt)
+                            put(MediaStore.MediaColumns.DATA, newFile.absolutePath)
+                        }
+                        context.contentResolver.update(android.net.Uri.parse(item.url), values, null, null)
+                        
+                        // Escaneo forzado para asegurar que MediaStore se actualice
+                        android.media.MediaScannerConnection.scanFile(context, arrayOf(newFile.absolutePath), null, null)
+                    } else {
+                        throw Exception("No se pudo renombrar el archivo físico")
+                    }
+                } else {
+                    // MODO NORMAL: Vía MediaStore (Podría pedir permiso individual)
+                    val contentUri = android.net.Uri.parse(item.url)
+                    val values = android.content.ContentValues().apply {
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, newNameWithExt)
+                    }
+                    try {
+                        context.contentResolver.update(contentUri, values, null, null)
+                    } catch (securityException: SecurityException) {
+                        val recoverable = securityException as? android.app.RecoverableSecurityException
+                        if (recoverable != null) {
+                            return@withContext RenameResult.PermissionRequired(recoverable.userAction.actionIntent.intentSender)
+                        } else throw securityException
+                    }
+                }
+            }
+            
+            mediaDao.updateTitle(item.id, newNameWithExt)
+            RenameResult.Success
+        } catch (e: Exception) {
+            e.printStackTrace()
+            RenameResult.Error(e.message ?: "Error desconocido")
+        }
+    }
+
+    /**
      * Limpia la caché local de Room.
      */
     suspend fun clearCache() {
         mediaDao.clearAll()
     }
+}
+
+sealed class RenameResult {
+    object Success : RenameResult()
+    data class Error(val message: String) : RenameResult()
+    data class PermissionRequired(val intentSender: android.content.IntentSender) : RenameResult()
 }

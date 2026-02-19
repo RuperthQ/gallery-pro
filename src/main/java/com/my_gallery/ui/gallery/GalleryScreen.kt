@@ -766,45 +766,44 @@ fun MetadataSheetContent(item: MediaItem, viewModel: GalleryViewModel) {
             .padding(GalleryDesign.PaddingLarge)
             .navigationBarsPadding()
     ) {
-        Text(
-            text = "Detalles",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = GalleryDesign.PaddingMedium)
-        )
+        // Fila de Metadata Unificada (Ahora actúa como Header Pro)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = GalleryDesign.PaddingMedium),
+            horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall)
+        ) {
+            MetadataColumnItem(
+                icon = Icons.Default.SdStorage,
+                label = "Tamaño",
+                value = formatFileSize(item.size),
+                modifier = Modifier.weight(1f)
+            )
+            MetadataColumnItem(
+                icon = Icons.Default.Straighten,
+                label = "Resolución",
+                value = if (item.width > 0) "${item.width}x${item.height}" else "---",
+                modifier = Modifier.weight(1f)
+            )
+            MetadataColumnItem(
+                icon = Icons.Default.Info,
+                label = "Tipo",
+                value = item.mimeType.split("/").last().uppercase(),
+                modifier = Modifier.weight(1f)
+            )
+        }
 
         Column(verticalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall)) {
             MetadataEditItem(
                 icon = Icons.Default.Title,
-                label = "Nombre",
+                label = "Nombre del archivo",
                 initialValue = item.title,
                 onSave = { newName -> viewModel.renameMedia(item, newName) }
             )
             MetadataItem(
                 icon = Icons.Default.CalendarMonth,
-                label = "Fecha",
+                label = "Fecha de captura",
                 value = dateFormatter.format(Date(item.dateAdded))
-            )
-            MetadataItem(
-                icon = Icons.Default.SdStorage,
-                label = "Tamaño",
-                value = formatFileSize(item.size)
-            )
-            MetadataItem(
-                icon = Icons.Default.Straighten,
-                label = "Resolución",
-                value = if (item.width > 0) "${item.width} x ${item.height}" else "Desconocida"
-            )
-            MetadataItem(
-                icon = Icons.Default.Info,
-                label = "Tipo MIME",
-                value = item.mimeType
-            )
-            MetadataItem(
-                icon = Icons.Default.Image,
-                label = "ID único",
-                value = item.id
             )
         }
         
@@ -1104,6 +1103,44 @@ fun MetadataItem(
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
+    }
+}
+
+@Composable
+fun MetadataColumnItem(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(GalleryDesign.CardShape)
+            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f))
+            .padding(GalleryDesign.PaddingMedium),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(GalleryDesign.IconSizeSmall)
+        )
+        Spacer(modifier = Modifier.height(GalleryDesign.PaddingTiny))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+            maxLines = 1
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
     }
 }
 

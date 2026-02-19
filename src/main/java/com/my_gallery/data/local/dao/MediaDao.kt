@@ -21,6 +21,7 @@ interface MediaDao {
         AND (
             (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
         )
+        AND (:albumId IS NULL OR albumId = :albumId)
         ORDER BY dateAdded DESC
     """)
     fun pagingSourceAdvanced(
@@ -28,6 +29,7 @@ interface MediaDao {
         start: Long, 
         end: Long, 
         mimeType: String,
+        albumId: String? = null,
         minWidth: Int = 0,
         minHeight: Int = 0
     ): PagingSource<Int, MediaEntity>
@@ -43,6 +45,9 @@ interface MediaDao {
 
     @Query("UPDATE media_items SET title = :title WHERE id = :id")
     suspend fun updateTitle(id: String, title: String)
+
+    @Query("DELETE FROM media_items WHERE source = :source")
+    suspend fun clearBySource(source: String)
 
     @Query("DELETE FROM media_items")
     suspend fun clearAll()

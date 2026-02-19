@@ -18,7 +18,8 @@ data class MediaEntity(
     val width: Int = 0,
     val height: Int = 0,
     val source: String = "LOCAL",
-    val path: String? = null
+    val path: String? = null,
+    val albumId: String? = null
 ) {
     fun toDomain() = MediaItem(
         id = id,
@@ -31,7 +32,8 @@ data class MediaEntity(
         width = width,
         height = height,
         source = source,
-        path = path
+        path = path,
+        albumId = albumId
     )
 
     companion object {
@@ -46,7 +48,8 @@ data class MediaEntity(
             width = domain.width,
             height = domain.height,
             source = source,
-            path = domain.path
+            path = domain.path,
+            albumId = domain.albumId
         )
     }
 }

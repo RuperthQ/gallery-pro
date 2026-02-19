@@ -28,5 +28,14 @@ data class MediaItem(
     @SerializedName("source")
     val source: String = "LOCAL",
     @SerializedName("path")
-    val path: String? = null
+    val path: String? = null,
+    @SerializedName("albumId")
+    val albumId: String? = null
+)
+@Keep
+data class AlbumItem(
+    val id: String,
+    val name: String,
+    val thumbnail: String,
+    val count: Int
 )

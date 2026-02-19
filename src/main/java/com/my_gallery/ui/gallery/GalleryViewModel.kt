@@ -10,20 +10,35 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
-
 import android.app.Application
 import com.my_gallery.data.repository.MediaRepository
 import com.my_gallery.data.repository.RenameResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import com.my_gallery.domain.model.AlbumItem
 
 enum class GallerySource { CLOUD, LOCAL }
+
 
 @HiltViewModel
 class GalleryViewModel @Inject constructor(
     private val application: Application,
     private val repository: MediaRepository
 ) : ViewModel() {
+
+    private val _albums = MutableStateFlow<List<AlbumItem>>(emptyList())
+    val albums: StateFlow<List<AlbumItem>> = _albums.asStateFlow()
+
+    private val _selectedAlbum = MutableStateFlow<String?>(null)
+    val selectedAlbum: StateFlow<String?> = _selectedAlbum.asStateFlow()
+
+    fun toggleAlbum(albumId: String?) {
+        if (albumId == "ALL_VIRTUAL_ALBUM") {
+            _selectedAlbum.value = null
+        } else {
+            _selectedAlbum.value = if (_selectedAlbum.value == albumId) null else albumId
+        }
+    }
 
     private val _columnCount = MutableStateFlow(4)
     val columnCount: StateFlow<Int> = _columnCount.asStateFlow()
@@ -86,6 +101,17 @@ class GalleryViewModel @Inject constructor(
             delay(500)
             repository.syncCloudGallery()
             repository.syncLocalGallery()
+            
+            // Cargar álbumes después de la sync inicial
+            repository.getLocalAlbums().collect { list ->
+                val virtualAll = AlbumItem(
+                    id = "ALL_VIRTUAL_ALBUM",
+                    name = "Todo",
+                    thumbnail = list.firstOrNull()?.thumbnail ?: "",
+                    count = 0
+                )
+                _albums.value = listOf(virtualAll) + list
+            }
         }
     }
 
@@ -131,12 +157,13 @@ class GalleryViewModel @Inject constructor(
         _selectedFilter,
         _selectedImageFilter,
         _selectedVideoFilter,
-        _currentSource
-    ) { date, imgExt, vidRes, source ->
-        FilterState(date, imgExt, vidRes, source)
+        _currentSource,
+        _selectedAlbum
+    ) { date, imgExt, vidRes, source, albumId ->
+        FilterState(date, imgExt, vidRes, source, albumId)
     }.distinctUntilChanged()
      .flatMapLatest { state ->
-        val (date, imgExt, vidRes, source) = state
+        val (date, imgExt, vidRes, source, albumId) = state
         var startRange = 0L
         var endRange = Long.MAX_VALUE
         if (date != null && date != "Todos") {
@@ -172,7 +199,7 @@ class GalleryViewModel @Inject constructor(
                 maxSize = PagingConfig.MAX_SIZE_UNBOUNDED,
                 enablePlaceholders = true
             ),
-            pagingSourceFactory = { repository.getPagedItems(source.name, startRange, endRange, mimeFilter, minW, minH) }
+            pagingSourceFactory = { repository.getPagedItems(source.name, startRange, endRange, mimeFilter, albumId, minW, minH) }
         ).flow
             .map { it.map { item -> GalleryUiModel.Media(item.toDomain()) as GalleryUiModel } }
             .map { pagingData ->
@@ -302,5 +329,6 @@ data class FilterState(
     val date: String?,
     val imgExt: String?,
     val vidRes: String?,
-    val source: GallerySource
+    val source: GallerySource,
+    val albumId: String?
 )

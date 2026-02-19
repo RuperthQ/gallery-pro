@@ -16,11 +16,56 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import com.my_gallery.domain.model.AlbumItem
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+
 @Singleton
 class MediaRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaDao: MediaDao
 ) {
+
+    /**
+     * Obtiene los álbumes (carpetas) locales con su miniatura más reciente.
+     */
+    fun getLocalAlbums(): Flow<List<AlbumItem>> = flow {
+        val albums = mutableMapOf<String, AlbumItem>()
+        val projection = arrayOf(
+            MediaStore.MediaColumns.BUCKET_ID,
+            MediaStore.MediaColumns.BUCKET_DISPLAY_NAME,
+            MediaStore.MediaColumns._ID
+        )
+
+        val uris = listOf(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        )
+
+        uris.forEach { uri ->
+            context.contentResolver.query(
+                uri,
+                projection,
+                null, null,
+                "${MediaStore.MediaColumns.DATE_ADDED} DESC"
+            )?.use { cursor ->
+                val bucketIdCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_ID)
+                val bucketNameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+
+                while (cursor.moveToNext()) {
+                    val bucketId = cursor.getString(bucketIdCol)
+                    if (!albums.containsKey(bucketId)) {
+                        val name = cursor.getString(bucketNameCol) ?: "Otros"
+                        val id = cursor.getLong(idCol)
+                        val contentUri = ContentUris.withAppendedId(uri, id).toString()
+                        albums[bucketId] = AlbumItem(bucketId, name, contentUri, 0)
+                    }
+                }
+            }
+        }
+        emit(albums.values.toList().sortedBy { it.name })
+    }.flowOn(Dispatchers.IO)
 
     private val syncMutex = Mutex()
 
@@ -49,7 +94,8 @@ class MediaRepository @Inject constructor(
                             MediaStore.MediaColumns.SIZE,
                             MediaStore.MediaColumns.WIDTH,
                             MediaStore.MediaColumns.HEIGHT,
-                            MediaStore.MediaColumns.DATA
+                            MediaStore.MediaColumns.DATA,
+                            MediaStore.MediaColumns.BUCKET_ID
                         ), 
                         null, null,
                         "${MediaStore.MediaColumns.DATE_ADDED} DESC"
@@ -64,11 +110,13 @@ class MediaRepository @Inject constructor(
                         val widthCol = it.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
                         val heightCol = it.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
                         val dataCol = it.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA)
+                        val bucketIdCol = it.getColumnIndexOrThrow(MediaStore.MediaColumns.BUCKET_ID)
 
                         while (it.moveToNext()) {
                             val id = it.getLong(idCol)
                             val contentUri = ContentUris.withAppendedId(uri, id).toString()
                             val absolutePath = it.getString(dataCol)
+                            val bucketId = it.getString(bucketIdCol)
                             
                             allEntities.add(MediaEntity(
                                 id = "${typePrefix}_$id",
@@ -81,13 +129,16 @@ class MediaRepository @Inject constructor(
                                 width = it.getInt(widthCol),
                                 height = it.getInt(heightCol),
                                 source = "LOCAL",
-                                path = absolutePath
+                                path = absolutePath,
+                                albumId = bucketId
                             ))
                         }
                     }
                 }
                 
-                // Un solo golpe a la DB para evitar saturar el canal de invalidación de Paging
+                // Limpiamos la caché local antes de re-sincronizar para evitar duplicados persistentes
+                mediaDao.clearBySource("LOCAL")
+                
                 if (allEntities.isNotEmpty()) {
                     mediaDao.insertAll(allEntities)
                 }
@@ -134,11 +185,17 @@ class MediaRepository @Inject constructor(
         start: Long, 
         end: Long,
         mimeType: String?,
+        albumId: String? = null,
         minWidth: Int = 0,
         minHeight: Int = 0
     ): PagingSource<Int, MediaEntity> {
-        val searchMime = mimeType?.let { if (it.contains("/")) it else "%/$it%" } ?: "%"
-        return mediaDao.pagingSourceAdvanced(source, start, end, searchMime, minWidth, minHeight)
+        val searchMime = when {
+            mimeType == null || mimeType == "%" || mimeType == "Todas" -> "%"
+            mimeType.startsWith("image/") || mimeType.startsWith("video/") -> "$mimeType%"
+            !mimeType.contains("/") -> "%${mimeType.lowercase()}%"
+            else -> mimeType
+        }
+        return mediaDao.pagingSourceAdvanced(source, start, end, searchMime, albumId, minWidth, minHeight)
     }
 
     /**

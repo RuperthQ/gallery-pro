@@ -38,7 +38,7 @@ fun FilterRow(viewModel: GalleryViewModel) {
                 FilterSection(
                     label = filter.title,
                     options = options,
-                    selectedOption = selectedOption ?: "Todas",
+                    selectedOption = selectedOption,
                     onOptionSelected = { filter.onOptionSelected(it) }
                 )
             }
@@ -50,7 +50,7 @@ fun FilterRow(viewModel: GalleryViewModel) {
 fun FilterSection(
     label: String,
     options: List<String>,
-    selectedOption: String,
+    selectedOption: String?,
     onOptionSelected: (String) -> Unit
 ) {
     Column(

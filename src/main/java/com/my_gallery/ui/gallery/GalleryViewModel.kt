@@ -122,7 +122,12 @@ class GalleryViewModel @Inject constructor(
     fun toggleMediaSelection(mediaId: String) {
         val current = _selectedMediaIds.value.toMutableSet()
         if (current.contains(mediaId)) current.remove(mediaId) else current.add(mediaId)
-        _selectedMediaIds.value = current
+        
+        if (current.isEmpty() && _isSelectionMode.value) {
+            exitSelection()
+        } else {
+            _selectedMediaIds.value = current
+        }
     }
 
     fun showCreateAlbumDialog() {
@@ -614,9 +619,13 @@ class GalleryViewModel @Inject constructor(
                  newSet.addAll(groupIds)
             }
             
-            _selectedMediaIds.value = newSet
-            if (newSet.isNotEmpty() && !_isSelectionMode.value) {
-                _isSelectionMode.value = true
+            if (newSet.isEmpty() && _isSelectionMode.value) {
+                exitSelection()
+            } else {
+                _selectedMediaIds.value = newSet
+                if (newSet.isNotEmpty() && !_isSelectionMode.value) {
+                    _isSelectionMode.value = true
+                }
             }
         }
     }

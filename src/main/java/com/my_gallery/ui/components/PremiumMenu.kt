@@ -35,38 +35,39 @@ fun PremiumMenu(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
+                    .background(Color.Black.copy(alpha = GalleryDesign.AlphaOverlay))
                     .clickable { onDismiss() }
             )
         }
 
-        // El Menú Flotante
+        // El Menú Estilo BottomSheet Pro
         AnimatedVisibility(
             visible = visible,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(tween(300)),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(300)),
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(tween(GalleryDesign.ViewerAnimNormal)),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(GalleryDesign.ViewerAnimNormal)),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
+            val bottomSheetShape = GalleryDesign.BottomSheetShape
             Box(
                 modifier = Modifier
-                    .padding(GalleryDesign.PaddingLarge)
                     .fillMaxWidth()
-                    .clip(GalleryDesign.HeaderFullShape)
+                    .navigationBarsPadding() // Respeta la barra de sistema de abajo
+                    .clip(bottomSheetShape)
                     .glassBackground()
-                    .premiumBorder(shape = GalleryDesign.HeaderFullShape)
-                    .padding(GalleryDesign.PaddingMedium)
+                    .premiumBorder(shape = bottomSheetShape)
+                    .padding(vertical = GalleryDesign.PaddingMedium)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall)) {
-                    // Indicador de arrastre (Estético)
+                Column(verticalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingTiny)) {
+                    // Indicador de arrastre (Fino y Elegante)
                     Box(
                         modifier = Modifier
-                            .size(width = 40.dp, height = 4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color.Gray.copy(alpha = 0.3f))
+                            .size(width = GalleryDesign.DragIndicatorWidth, height = GalleryDesign.DragIndicatorHeight)
+                            .clip(RoundedCornerShape(GalleryDesign.PaddingTiny / 2))
+                            .background(Color.White.copy(alpha = GalleryDesign.AlphaDisable))
                             .align(Alignment.CenterHorizontally)
                     )
                     
-                    Spacer(modifier = Modifier.height(GalleryDesign.PaddingSmall))
+                    Spacer(modifier = Modifier.height(GalleryDesign.PaddingTiny))
 
                     items.forEach { item ->
                         PremiumMenuRow(item = item)
@@ -82,17 +83,17 @@ fun PremiumMenuRow(item: PremiumMenuItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(GalleryDesign.MenuItemHeight) // Más compacto
             .clip(GalleryDesign.CardShape)
             .clickable { item.onClick() }
-            .padding(horizontal = GalleryDesign.PaddingMedium),
+            .padding(horizontal = GalleryDesign.PaddingLarge),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = item.icon,
             contentDescription = null,
             tint = if (item.isSelected) MaterialTheme.colorScheme.primary else Color.White,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(GalleryDesign.IconSizeNormal)
         )
         Spacer(modifier = Modifier.width(GalleryDesign.PaddingMedium))
         Text(

@@ -77,9 +77,10 @@ fun MediaViewerScreen(
     var isFullScreen by remember { mutableStateOf(false) }
     var isLocked by remember { mutableStateOf(false) }
     var showUnlockOverlay by remember { mutableStateOf(false) }
-    var isLockingPersist by remember { mutableStateOf(false) } // Para el delay del botón
+    var isLockingPersist by remember { mutableStateOf(false) } 
     var globalScale by remember { mutableFloatStateOf(1f) }
     var showMenu by remember { mutableStateOf(false) }
+    var currentVideoIsHorizontal by remember { mutableStateOf(true) }
 
     val scope = rememberCoroutineScope()
     val autoplayEnabled by viewModel.autoplayEnabled.collectAsStateWithLifecycle()
@@ -101,7 +102,7 @@ fun MediaViewerScreen(
     // Auto-ocultar el botón de desbloqueo
     LaunchedEffect(showUnlockOverlay) {
         if (showUnlockOverlay) {
-            kotlinx.coroutines.delay(3000)
+            kotlinx.coroutines.delay(GalleryDesign.ViewerAnimLong.toLong())
             showUnlockOverlay = false
         }
     }
@@ -158,7 +159,7 @@ fun MediaViewerScreen(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             userScrollEnabled = !isLocked && globalScale <= 1f, // BLOQUEO: Si está bloqueado o hay zoom, no hay swipe
-            pageSpacing = 16.dp
+            pageSpacing = GalleryDesign.PaddingLarge
         ) { pageIndex ->
             val uiModel = items[pageIndex]
             if (uiModel is GalleryUiModel.Media) {
@@ -203,12 +204,15 @@ fun MediaViewerScreen(
                         ) {
                             VideoPlayer(
                                 videoUrl = uiModel.item.url,
+                                videoWidth = uiModel.item.width,
+                                videoHeight = uiModel.item.height,
                                 autoplayEnabled = autoplayEnabled,
                                 isActive = pagerState.currentPage == pageIndex,
                                 isFullScreen = isFullScreen,
                                 showControls = uiVisible,
                                 onFullScreenChange = { isFullScreen = it },
                                 onControlsVisibilityChange = { if (!isLocked) uiVisible = it },
+                                onVideoOrientationDetected = { currentVideoIsHorizontal = it },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -227,7 +231,7 @@ fun MediaViewerScreen(
             } else {
                 // Si es un separador, mostramos un placeholder o saltamos (en este caso vacío)
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Cargando...", color = Color.Gray)
+                    Text("Cargando...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = GalleryDesign.AlphaOverlay))
                 }
             }
         }
@@ -248,7 +252,7 @@ fun MediaViewerScreen(
                 ) {
                     SmallFloatingActionButton(
                         onClick = onClose,
-                        containerColor = Color.Black.copy(alpha = 0.5f),
+                        containerColor = Color.Black.copy(alpha = GalleryDesign.AlphaOverlay),
                         contentColor = Color.White,
                         modifier = Modifier.align(Alignment.CenterStart),
                         shape = GalleryDesign.CardShape
@@ -257,7 +261,7 @@ fun MediaViewerScreen(
                     val currentItem = (items[pagerState.currentPage] as? GalleryUiModel.Media)?.item
                     if (currentItem != null) {
                         Surface(
-                            color = Color.Black.copy(alpha = 0.3f),
+                            color = Color.Black.copy(alpha = GalleryDesign.AlphaBorderLight),
                             shape = GalleryDesign.FilterShape,
                             modifier = Modifier
                                 .align(Alignment.Center)
@@ -280,7 +284,7 @@ fun MediaViewerScreen(
                         Box(modifier = Modifier.align(Alignment.CenterEnd)) {
                             SmallFloatingActionButton(
                                 onClick = { showMenu = true },
-                                containerColor = Color.Black.copy(alpha = 0.5f),
+                                containerColor = Color.Black.copy(alpha = GalleryDesign.AlphaOverlay),
                                 contentColor = Color.White,
                                 shape = GalleryDesign.CardShape
                             ) {
@@ -350,10 +354,10 @@ fun MediaViewerScreen(
                                             Icon(
                                                 imageVector = Icons.Default.PlayCircle,
                                                 contentDescription = null,
-                                                tint = Color.White.copy(alpha = 0.8f),
+                                                tint = Color.White.copy(alpha = GalleryDesign.AlphaGlassLow),
                                                 modifier = Modifier
                                                     .align(Alignment.Center)
-                                                    .size(24.dp)
+                                                    .size(GalleryDesign.IconSizeNormal)
                                             )
                                         }
                                     }
@@ -410,21 +414,26 @@ fun MediaViewerScreen(
             )
         }
 
-        // --- BOTÓN DE BLOQUEO (Especial para FullScreen) ---
+        // --- BOTÓN DE BLOQUEO (Especial para FullScreen + Solo Horizontales) ---
+        val isHorizontal = if (currentItem?.mimeType?.startsWith("video/") == true) {
+            currentVideoIsHorizontal
+        } else {
+            currentItem?.let { it.width >= it.height } ?: true
+        }
         AnimatedVisibility(
-            visible = isFullScreen && uiVisible && !isLocked,
+            visible = isFullScreen && uiVisible && !isLocked && isHorizontal,
             enter = fadeIn(tween(300)),
             exit = fadeOut(tween(300)),
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(top = 12.dp)
-                .padding(horizontal = 64.dp)
+                .padding(top = GalleryDesign.PaddingViewerLockV)
+                .padding(horizontal = GalleryDesign.PaddingViewerLockH)
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), GalleryDesign.CardShape)
+                    .size(GalleryDesign.IconSizeAction)
+                    .background(Color.Black.copy(alpha = GalleryDesign.AlphaOverlay), GalleryDesign.CardShape)
                     .premiumBorder(shape = GalleryDesign.CardShape)
                     .clickable { 
                         // Bloqueo instantáneo
@@ -437,7 +446,7 @@ fun MediaViewerScreen(
                     imageVector = Icons.Default.Lock,
                     contentDescription = "Bloquear",
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(GalleryDesign.IconSizeSmall)
                 )
             }
         }
@@ -445,17 +454,17 @@ fun MediaViewerScreen(
         // --- BOTÓN DE DESBLOQUEO FLOTANTE ---
         AnimatedVisibility(
             visible = showUnlockOverlay,
-            enter = fadeIn(tween(300)) + scaleIn(initialScale = 0.8f),
-            exit = fadeOut(tween(300)) + scaleOut(targetScale = 0.8f),
+            enter = fadeIn(tween(GalleryDesign.ViewerAnimNormal)) + scaleIn(initialScale = 0.8f),
+            exit = fadeOut(tween(GalleryDesign.ViewerAnimNormal)) + scaleOut(targetScale = 0.8f),
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(top = 12.dp)
-                .padding(horizontal = 64.dp)
+                .padding(top = GalleryDesign.PaddingViewerLockV)
+                .padding(horizontal = GalleryDesign.PaddingViewerLockH)
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(GalleryDesign.IconSizeAction)
                     .background(brush = GalleryDesign.primaryGradient(), shape = GalleryDesign.CardShape)
                     .premiumBorder(shape = GalleryDesign.CardShape)
                     .clickable { 
@@ -469,7 +478,7 @@ fun MediaViewerScreen(
                     imageVector = Icons.Default.LockOpen,
                     contentDescription = "Desbloquear",
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(GalleryDesign.IconSizeSmall)
                 )
             }
         }
@@ -515,7 +524,7 @@ fun ZoomableImage(
                             scale = 1f
                             offset = Offset.Zero
                         } else {
-                            scale = 3f
+                            scale = GalleryDesign.ViewerScaleMax
                             offset = Offset.Zero 
                         }
                         onScaleChange(scale)
@@ -552,7 +561,7 @@ fun ZoomableImage(
                             if (pastTouchSlop) {
                                 // Solo consumimos si estamos haciendo zoom o si ya estamos ampliados
                                 if (scale > 1.01f || zoomChange > 1.01f) {
-                                    val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+                                    val newScale = (scale * zoomChange).coerceIn(1f, GalleryDesign.ViewerScaleLimit)
                                     val candidateOffset = offset + panChange * scale
                                     
                                     scale = newScale
@@ -577,7 +586,7 @@ fun ZoomableImage(
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(item.url)
-                .crossfade(300) // Aumentado a 300ms
+                .crossfade(GalleryDesign.ViewerAnimNormal)
                 .build(),
             contentDescription = null,
             onState = { if (it is coil.compose.AsyncImagePainter.State.Success) imageIntrinsicSize = it.painter?.intrinsicSize ?: Size.Zero },
@@ -607,7 +616,7 @@ fun ViewerActionButton(
             .clickable { onClick() }
             .padding(GalleryDesign.PaddingSmall)
     ) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+        Icon(icon, null, tint = Color.White, modifier = Modifier.size(GalleryDesign.IconSizeNormal))
         Text(label, color = Color.White, style = MaterialTheme.typography.labelSmall)
     }
 }

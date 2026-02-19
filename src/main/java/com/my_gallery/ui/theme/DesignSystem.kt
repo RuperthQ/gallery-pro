@@ -24,9 +24,18 @@ object GalleryDesign {
     val PaddingSmall = 8.dp
     val PaddingTiny = 4.dp
     
+    val PaddingViewerLockH = 64.dp
+    val PaddingViewerLockV = 12.dp
+    
+    val IconSizeExtraSmall = 16.dp
     val IconSizeSmall = 20.dp
     val IconSizeNormal = 24.dp
     val IconSizeLarge = 28.dp
+    val IconSizeAction = 40.dp
+    
+    val MenuItemHeight = 50.dp
+    val DragIndicatorWidth = 36.dp
+    val DragIndicatorHeight = 4.dp
     
     val BorderWidthThin = 1.dp
     val BorderWidthNone = 0.dp
@@ -38,6 +47,7 @@ object GalleryDesign {
 
     // --- Formas (Shapes) ---
     val CornerRadiusLarge = 20.dp
+    val CornerRadiusExtraLarge = 24.dp
     val CornerRadiusMedium = 12.dp
     val CornerRadiusSmall = 6.dp
 
@@ -45,12 +55,13 @@ object GalleryDesign {
     val FilterShape = RoundedCornerShape(CornerRadiusLarge)
     val HeaderShape = RoundedCornerShape(bottomStart = CornerRadiusLarge, bottomEnd = CornerRadiusLarge)
     val HeaderFullShape = RoundedCornerShape(
-        topStart = 0.dp, 
-        topEnd = 0.dp, 
+        topStart = BorderWidthNone, 
+        topEnd = BorderWidthNone, 
         bottomStart = CornerRadiusLarge, 
         bottomEnd = CornerRadiusLarge
     )
     val OverlayShape = RoundedCornerShape(CornerRadiusSmall)
+    val BottomSheetShape = RoundedCornerShape(topStart = CornerRadiusExtraLarge, topEnd = CornerRadiusExtraLarge)
 
     // --- Efectos Visuales (Alphas & Blur) ---
     val AlphaGlassHigh = 0.9f // Más denso para que se note el efecto cristal
@@ -59,14 +70,22 @@ object GalleryDesign {
     val AlphaBorderLight = 0.15f
     val AlphaOverlay = 0.4f
     val AlphaSecondary = 0.05f
+    val AlphaDisable = 0.2f
     
     val BlurRadius = 16.dp 
+    val ElevationSmall = 2.dp
 
     // --- Viewer Specific (Tokens) ---
     val ViewerAnimNormal = 300
     val ViewerAnimFast = 200
     val ViewerAnimSlow = 400
     val ViewerAnimBorder = 2000
+    val ViewerAnimLong = 3000
+    val ShimmerAnimDuration = 1000
+    
+    val ShimmerXStart = -500f
+    val ShimmerXEnd = 1000f
+    val ShimmerWidth = 300f
     
     val ViewerHeaderSafetyPadding = 56.dp
     val ViewerTitlePaddingH = 16.dp
@@ -86,6 +105,8 @@ object GalleryDesign {
     val ViewerScaleTransition = 0.92f
     val ViewerScaleOverlay = 0.95f
     val ViewerScalePagerDown = 0.88f
+    val ViewerScaleMax = 3f
+    val ViewerScaleLimit = 5f
     @Composable
     fun primaryGradient() = Brush.linearGradient(
         colors = listOf(

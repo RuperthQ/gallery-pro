@@ -10,29 +10,37 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.my_gallery.ui.theme.GalleryDesign
+import com.my_gallery.ui.theme.GalleryDesign.BorderWidthNone
 
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayer(
     videoUrl: String,
+    videoWidth: Int = 0,
+    videoHeight: Int = 0,
     autoplayEnabled: Boolean = true,
     isActive: Boolean = true,
     isFullScreen: Boolean = false,
     showControls: Boolean = true,
     onFullScreenChange: (Boolean) -> Unit = {},
     onControlsVisibilityChange: (Boolean) -> Unit = {},
+    onVideoOrientationDetected: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -73,6 +81,22 @@ fun VideoPlayer(
         }
     }
 
+    var isActuallyHorizontal by remember { mutableStateOf(videoWidth >= videoHeight) }
+
+    // Escuchamos el tamaño real del video procesado (ignora flags de rotación erróneos)
+    LaunchedEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    val isHorizontal = videoSize.width > videoSize.height
+                    isActuallyHorizontal = isHorizontal
+                    onVideoOrientationDetected(isHorizontal)
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+    }
+
     // Gestionamos el ciclo de vida del player
     DisposableEffect(Unit) {
         onDispose {
@@ -82,7 +106,14 @@ fun VideoPlayer(
     }
 
     val density = LocalDensity.current
-    val hPaddingPx = with(density) { (if (isFullScreen) 64.dp else 0.dp).roundToPx() }
+    val hPaddingPx = with(density) { 
+        val padding = when {
+            !isFullScreen -> BorderWidthNone
+            isActuallyHorizontal -> GalleryDesign.PaddingViewerLockH
+            else -> GalleryDesign.PaddingViewerLockH / 2 // 32dp
+        }
+        padding.roundToPx() 
+    }
 
     AndroidView(
         factory = { ctx ->
@@ -95,7 +126,12 @@ fun VideoPlayer(
                 setFullscreenButtonClickListener { isFullScreen ->
                     onFullScreenChange(isFullScreen)
                     val activity = ctx as? Activity
-                    activity?.requestedOrientation = if (isFullScreen) {
+                    
+                    // Usamos el videoSize real del reproductor en ese momento
+                    val videoSize = exoPlayer.videoSize
+                    val isHorizontal = videoSize.width > videoSize.height
+                    
+                    activity?.requestedOrientation = if (isFullScreen && isHorizontal) {
                         ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                     } else {
                         ActivityInfo.SCREEN_ORIENTATION_PORTRAIT

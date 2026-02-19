@@ -209,7 +209,7 @@ fun GalleryScreen(
                     if (items.itemCount == 0) {
                         item(span = { GridItemSpan(animatedColumns) }) {
                             Box(
-                                modifier = Modifier.fillMaxWidth().height(400.dp),
+                                modifier = Modifier.fillMaxWidth().height(GalleryDesign.ThumbImageSize.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
@@ -220,11 +220,11 @@ fun GalleryScreen(
                 is LoadState.Error -> {
                     item(span = { GridItemSpan(animatedColumns) }) {
                         Box(
-                            modifier = Modifier.fillMaxWidth().height(400.dp),
+                            modifier = Modifier.fillMaxWidth().height(GalleryDesign.ThumbImageSize.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Error al cargar la galería", color = Color.Red)
+                                Text("Error al cargar la galería", color = MaterialTheme.colorScheme.error)
                                 Spacer(modifier = Modifier.height(GalleryDesign.PaddingMedium))
                                 Button(onClick = { items.retry() }) {
                                     Text("Reintentar")
@@ -244,11 +244,11 @@ fun GalleryScreen(
                                     Icon(
                                         imageVector = Icons.Default.Image,
                                         contentDescription = null,
-                                        tint = Color.Gray.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(64.dp)
+                                        tint = Color.Gray.copy(alpha = GalleryDesign.AlphaOverlay),
+                                        modifier = Modifier.size(GalleryDesign.IconSizeAction * 1.5f)
                                     )
                                     Spacer(modifier = Modifier.height(GalleryDesign.PaddingMedium))
-                                    Text("No se encontraron medios", color = Color.Gray)
+                                    Text("No se encontraron medios", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Spacer(modifier = Modifier.height(GalleryDesign.PaddingSmall))
                                     
                                     val permissions = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -283,7 +283,7 @@ fun GalleryScreen(
             ModalBottomSheet(
                 onDismissRequest = { viewModel.deselectItem() },
                 sheetState = sheetState,
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = GalleryDesign.AlphaGlassHigh),
                 shape = GalleryDesign.HeaderShape,
                 dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.primary) }
             ) {
@@ -443,7 +443,7 @@ fun FilterSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded }
-                .padding(horizontal = GalleryDesign.PaddingLarge, vertical = 4.dp),
+                .padding(horizontal = GalleryDesign.PaddingLarge, vertical = GalleryDesign.PaddingTiny),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -456,8 +456,8 @@ fun FilterSection(
             Icon(
                 imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                modifier = Modifier.size(16.dp)
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = GalleryDesign.AlphaOverlay),
+                modifier = Modifier.size(GalleryDesign.IconSizeExtraSmall)
             )
         }
         AnimatedVisibility(visible = isExpanded) {
@@ -620,7 +620,7 @@ fun GalleryItem(
                 onLongClick = onLongClick
             ),
         shape = GalleryDesign.CardShape,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = GalleryDesign.ElevationSmall)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (!isLoaded) {
@@ -746,7 +746,7 @@ fun MetadataItem(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(GalleryDesign.IconSizeNormal)
         )
         Spacer(modifier = Modifier.width(GalleryDesign.PaddingMedium))
         Column {

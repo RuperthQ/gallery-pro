@@ -17,8 +17,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import com.my_gallery.domain.model.AlbumItem
 
-enum class GallerySource { CLOUD, LOCAL }
-
+enum class GallerySource { LOCAL }
 
 @HiltViewModel
 class GalleryViewModel @Inject constructor(
@@ -42,9 +41,6 @@ class GalleryViewModel @Inject constructor(
 
     private val _columnCount = MutableStateFlow(4)
     val columnCount: StateFlow<Int> = _columnCount.asStateFlow()
-
-    private val _currentSource = MutableStateFlow(GallerySource.CLOUD)
-    val currentSource: StateFlow<GallerySource> = _currentSource.asStateFlow()
 
     private val _selectedFilter = MutableStateFlow<String?>(null)
     val selectedFilter: StateFlow<String?> = _selectedFilter.asStateFlow()
@@ -91,18 +87,27 @@ class GalleryViewModel @Inject constructor(
         _isEditPermissionGranted.value = granted
     }
 
+    fun requestEditPermission(context: android.content.Context) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            try {
+                val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = android.net.Uri.parse("package:${context.packageName}")
+                context.startActivity(intent)
+            }
+        }
+    }
+
     private val dateFormatter = SimpleDateFormat("MMMM yyyy", Locale("es", "ES"))
 
     init {
         checkEditPermission()
-        // Sincronización inteligente: Solo si es necesario
         viewModelScope.launch {
-            // Un pequeño delay para que la UI termine su primer render sin estrés
             delay(500)
-            repository.syncCloudGallery()
             repository.syncLocalGallery()
             
-            // Cargar álbumes después de la sync inicial
             repository.getLocalAlbums().collect { list ->
                 val virtualAll = AlbumItem(
                     id = "ALL_VIRTUAL_ALBUM",
@@ -120,9 +125,7 @@ class GalleryViewModel @Inject constructor(
         emit(filters)
     }.stateIn(viewModelScope, SharingStarted.Lazily, listOf("Todos"))
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val availableImageExtensions: StateFlow<List<String>> = _currentSource
-        .flatMapLatest { source -> repository.getDistinctMimeTypes(source.name) }
+    val availableImageExtensions: StateFlow<List<String>> = repository.getDistinctMimeTypes("LOCAL")
         .map { mimes ->
             listOf("Todas") + mimes
                 .filter { it.startsWith("image/") }
@@ -131,9 +134,7 @@ class GalleryViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, listOf("Todas"))
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val availableVideoResolutions: StateFlow<List<String>> = _currentSource
-        .flatMapLatest { source -> repository.getAvailableVideoResolutions(source.name) }
+    val availableVideoResolutions: StateFlow<List<String>> = repository.getAvailableVideoResolutions("LOCAL")
         .map { resolutions ->
             val labels = mutableSetOf<String>()
             resolutions.forEach { res ->
@@ -157,13 +158,12 @@ class GalleryViewModel @Inject constructor(
         _selectedFilter,
         _selectedImageFilter,
         _selectedVideoFilter,
-        _currentSource,
         _selectedAlbum
-    ) { date, imgExt, vidRes, source, albumId ->
-        FilterState(date, imgExt, vidRes, source, albumId)
+    ) { date, imgExt, vidRes, albumId ->
+        FilterState(date, imgExt, vidRes, albumId)
     }.distinctUntilChanged()
      .flatMapLatest { state ->
-        val (date, imgExt, vidRes, source, albumId) = state
+        val (date, imgExt, vidRes, albumId) = state
         var startRange = 0L
         var endRange = Long.MAX_VALUE
         if (date != null && date != "Todos") {
@@ -199,7 +199,7 @@ class GalleryViewModel @Inject constructor(
                 maxSize = PagingConfig.MAX_SIZE_UNBOUNDED,
                 enablePlaceholders = true
             ),
-            pagingSourceFactory = { repository.getPagedItems(source.name, startRange, endRange, mimeFilter, albumId, minW, minH) }
+            pagingSourceFactory = { repository.getPagedItems("LOCAL", startRange, endRange, mimeFilter, albumId, minW, minH) }
         ).flow
             .map { it.map { item -> GalleryUiModel.Media(item.toDomain()) as GalleryUiModel } }
             .map { pagingData ->
@@ -216,14 +216,6 @@ class GalleryViewModel @Inject constructor(
 
     private fun formatDate(timestamp: Long): String {
         return dateFormatter.format(Date(timestamp))
-    }
-
-    fun toggleSource() {
-        _currentSource.value = if (_currentSource.value == GallerySource.CLOUD) {
-            GallerySource.LOCAL
-        } else {
-            GallerySource.CLOUD
-        }
     }
 
     fun changeColumns() {
@@ -267,7 +259,6 @@ class GalleryViewModel @Inject constructor(
 
     fun syncGallery() {
         viewModelScope.launch {
-            repository.syncCloudGallery()
             repository.syncLocalGallery()
         }
     }
@@ -291,16 +282,14 @@ class GalleryViewModel @Inject constructor(
                     val updated = item.copy(title = fullNewName)
                     _selectedItem.value = updated
                     if (_viewerItem.value?.id == item.id) _viewerItem.value = updated
-                    pendingRenameData = null // Limpiar si fue exitoso
+                    pendingRenameData = null
                 }
                 is RenameResult.PermissionRequired -> {
-                    // Guardamos para el reintento automático
-                    pendingRenameData = item to newName // Guardamos el nombre original solicitado
+                    pendingRenameData = item to newName
                     _pendingIntent.value = result.intentSender
                 }
                 is RenameResult.Error -> {
                     pendingRenameData = null
-                    // TODO: Error UI feedback
                 }
             }
         }
@@ -316,8 +305,8 @@ class GalleryViewModel @Inject constructor(
         pendingRenameData = null
     }
 
-    fun onIntentLaunched() {
-        // Obsoleto, usar onPermissionResult
+    fun clearPendingIntent() {
+        _pendingIntent.value = null
     }
 
     fun closeViewer() {
@@ -329,6 +318,5 @@ data class FilterState(
     val date: String?,
     val imgExt: String?,
     val vidRes: String?,
-    val source: GallerySource,
     val albumId: String?
 )

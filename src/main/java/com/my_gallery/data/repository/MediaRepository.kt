@@ -148,34 +148,6 @@ class MediaRepository @Inject constructor(
         }
     }
 
-    /**
-     * Sincroniza la galería Cloud (Mock) con Room.
-     */
-    suspend fun syncCloudGallery() = withContext(Dispatchers.IO) {
-        val count = mediaDao.countBySource("CLOUD")
-        if (count > 0) return@withContext 
-
-        val allEntities = mutableListOf<MediaEntity>()
-        // Reducimos a 100 items: suficiente para demo, ideal para velocidad
-        for (i in 0 until 100) {
-            allEntities.add(MediaEntity(
-                id = "cloud_$i",
-                url = "https://picsum.photos/seed/$i/1920/1080",
-                thumbnail = "https://picsum.photos/seed/$i/400/400",
-                title = "Cloud Image #$i",
-                dateAdded = System.currentTimeMillis() - (i * 1000L * 60 * 60 * 5),
-                mimeType = "image/jpeg",
-                size = (1024 * 1024 * 2.5).toLong() + (i * 1024),
-                width = 1920,
-                height = 1080,
-                source = "CLOUD"
-            ))
-        }
-        
-        if (allEntities.isNotEmpty()) {
-            mediaDao.insertAll(allEntities)
-        }
-    }
 
     /**
      * Obtiene el PagingSource desde Room con soporte para filtros de fecha, tipo y resolución.

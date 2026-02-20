@@ -30,12 +30,17 @@ data class MediaItem(
     @SerializedName("path")
     val path: String? = null,
     @SerializedName("albumId")
-    val albumId: String? = null
+    val albumId: String? = null,
+    @SerializedName("originalAlbumId")
+    val originalAlbumId: String? = null,
+    @SerializedName("rotation")
+    val rotation: Float = 0f
 )
 @Keep
 data class AlbumItem(
     val id: String,
     val name: String,
     val thumbnail: String,
-    val count: Int
+    val count: Int,
+    val rotation: Float = 0f
 )

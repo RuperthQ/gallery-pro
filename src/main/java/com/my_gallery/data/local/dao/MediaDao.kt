@@ -21,8 +21,8 @@ interface MediaDao {
         AND (
             (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
         )
-        AND (:albumId IS NULL OR albumId = :albumId)
-        ORDER BY dateAdded DESC
+        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
+        ORDER BY dateAdded DESC, id DESC
     """)
     fun pagingSourceAdvanced(
         source: String, 
@@ -35,6 +35,31 @@ interface MediaDao {
     ): PagingSource<Int, MediaEntity>
 
     @Query("""
+        SELECT COUNT(*) FROM media_items 
+        WHERE source = :source 
+        AND dateAdded >= :start AND dateAdded < :end 
+        AND mimeType LIKE :mimeType 
+        AND (
+            (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
+        )
+        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
+        AND (
+            dateAdded > (SELECT dateAdded FROM media_items WHERE id = :targetId)
+            OR (dateAdded = (SELECT dateAdded FROM media_items WHERE id = :targetId) AND id > :targetId)
+        )
+    """)
+    suspend fun getMediaRank(
+        targetId: String,
+        source: String, 
+        start: Long, 
+        end: Long, 
+        mimeType: String, 
+        albumId: String? = null,
+        minWidth: Int = 0,
+        minHeight: Int = 0
+    ): Int
+
+    @Query("""
         SELECT id FROM media_items 
         WHERE source = :source 
         AND dateAdded >= :start AND dateAdded < :end 
@@ -42,7 +67,7 @@ interface MediaDao {
         AND (
             (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
         )
-        AND (:albumId IS NULL OR albumId = :albumId)
+        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
     """)
     suspend fun getMediaIds(
         source: String, 
@@ -66,11 +91,32 @@ interface MediaDao {
     @Query("UPDATE media_items SET title = :title WHERE id = :id")
     suspend fun updateTitle(id: String, title: String)
 
+    @Query("UPDATE media_items SET rotation = :rotation WHERE id = :id")
+    suspend fun updateRotation(id: String, rotation: Float)
+
     @Query("UPDATE media_items SET path = :newPath, albumId = :newAlbumId WHERE id = :id")
     suspend fun updatePathAndAlbum(id: String, newPath: String, newAlbumId: String)
 
-    @Query("DELETE FROM media_items WHERE source = :source")
+    @Query("UPDATE media_items SET path = :newPath, albumId = :newAlbumId, url = :newUrl, thumbnail = :newUrl, originalAlbumId = :oldAlbumId WHERE id = :id")
+    suspend fun updatePathAlbumAndUrl(id: String, newPath: String, newAlbumId: String, newUrl: String, oldAlbumId: String?)
+
+    @Query("DELETE FROM media_items WHERE source = :source AND albumId != 'SECURE_VAULT'")
     suspend fun clearBySource(source: String)
+
+    @Query("SELECT COUNT(*) FROM media_items WHERE albumId = 'SECURE_VAULT'")
+    suspend fun getVaultCount(): Int
+
+    @Query("SELECT url FROM media_items WHERE albumId = 'SECURE_VAULT' ORDER BY dateAdded DESC LIMIT 1")
+    suspend fun getVaultLatestThumbnail(): String?
+
+    @Query("SELECT rotation FROM media_items WHERE url = :url LIMIT 1")
+    suspend fun getRotationByUrl(url: String): Float?
+
+    @Query("SELECT id FROM media_items WHERE albumId = 'SECURE_VAULT'")
+    suspend fun getVaultIds(): List<String>
+
+    @Query("SELECT thumbnail FROM media_items WHERE albumId != 'SECURE_VAULT' ORDER BY dateAdded DESC LIMIT 1")
+    suspend fun getLatestPublicThumbnail(): String?
 
     @Query("DELETE FROM media_items")
     suspend fun clearAll()
@@ -89,7 +135,7 @@ interface MediaDao {
         AND (
             (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
         )
-        AND (:albumId IS NULL OR albumId = :albumId)
+        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
         GROUP BY period
     """)
     fun getAllSectionsMetadata(

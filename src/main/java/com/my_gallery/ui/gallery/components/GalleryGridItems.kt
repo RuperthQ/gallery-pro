@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -173,7 +174,11 @@ fun GalleryItem(
             AsyncImage(
                 model = imageRequest,
                 contentDescription = item.title,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        rotationZ = item.rotation
+                    },
                 contentScale = ContentScale.Crop,
                 onState = { state ->
                     if (state is coil.compose.AsyncImagePainter.State.Success) {

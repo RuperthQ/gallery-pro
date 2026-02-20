@@ -57,6 +57,14 @@ class GalleryViewModel @Inject constructor(
     private val _showFilters = MutableStateFlow(false)
     val showFilters: StateFlow<Boolean> = _showFilters.asStateFlow()
 
+    private val _showEmptyAlbums = MutableStateFlow(false)
+    val showEmptyAlbums: StateFlow<Boolean> = _showEmptyAlbums.asStateFlow()
+
+    fun toggleShowEmptyAlbums() {
+        _showEmptyAlbums.value = !_showEmptyAlbums.value
+        syncGallery()
+    }
+
     private val _selectedItem = MutableStateFlow<MediaItem?>(null)
     val selectedItem: StateFlow<MediaItem?> = _selectedItem.asStateFlow()
 
@@ -96,6 +104,12 @@ class GalleryViewModel @Inject constructor(
 
     private val _isMovingMedia = MutableStateFlow(false)
     val isMovingMedia: StateFlow<Boolean> = _isMovingMedia.asStateFlow()
+
+    private val _isSecuringMedia = MutableStateFlow(false)
+    val isSecuringMedia: StateFlow<Boolean> = _isSecuringMedia.asStateFlow()
+
+    private val _isUnsecuringMedia = MutableStateFlow(false)
+    val isUnsecuringMedia: StateFlow<Boolean> = _isUnsecuringMedia.asStateFlow()
 
     private val _showDeleteConfirmation = MutableStateFlow(false)
     val showDeleteConfirmation: StateFlow<Boolean> = _showDeleteConfirmation.asStateFlow()
@@ -267,19 +281,43 @@ class GalleryViewModel @Inject constructor(
             repository.syncLocalGallery()
             loadAlbums()
         }
+        
+        // Reactividad a cambios externos
+        viewModelScope.launch {
+            repository.mediaChanges
+                .debounce(1000) // Evitar múltiples ráfagas de actualizaciones
+                .collect {
+                    syncGallery()
+                }
+        }
     }
 
     private fun loadAlbums() {
         viewModelScope.launch {
-            repository.getLocalAlbums().collect { list ->
+            repository.getLocalAlbums(_showEmptyAlbums.value).collect { list ->
                 val totalCount = list.sumOf { it.count }
+                val latestPublicThumb = repository.getLatestPublicThumbnail() ?: list.firstOrNull()?.thumbnail ?: ""
+                
                 val virtualAll = AlbumItem(
                     id = "ALL_VIRTUAL_ALBUM",
                     name = "Todo",
-                    thumbnail = list.firstOrNull()?.thumbnail ?: "",
+                    thumbnail = latestPublicThumb,
                     count = totalCount
                 )
-                _albums.value = listOf(virtualAll) + list
+                
+                val vaultCount = repository.getSecureVaultCount()
+                if (vaultCount > 0) {
+                    val vaultThumb = repository.getSecureVaultThumbnail() ?: ""
+                    val vaultVirtual = AlbumItem(
+                        id = "SECURE_VAULT",
+                        name = "Bóveda Segura",
+                        thumbnail = vaultThumb,
+                        count = vaultCount
+                    )
+                    _albums.value = listOf(virtualAll, vaultVirtual) + list
+                } else {
+                    _albums.value = listOf(virtualAll) + list
+                }
             }
         }
     }
@@ -396,7 +434,6 @@ class GalleryViewModel @Inject constructor(
                 pageSize = 40,
                 prefetchDistance = 80,
                 initialLoadSize = 120,
-                maxSize = PagingConfig.MAX_SIZE_UNBOUNDED,
                 enablePlaceholders = true
             ),
             pagingSourceFactory = { repository.getPagedItems("LOCAL", startRange, endRange, mimeFilter, albumId, minW, minH) }
@@ -416,6 +453,57 @@ class GalleryViewModel @Inject constructor(
                     if (formatDate(b.dateAdded) != afterDate) GalleryUiModel.Separator(afterDate) else null
                 }
             }
+    }.cachedIn(viewModelScope)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val viewerPagingData: Flow<PagingData<GalleryUiModel>> = combine(
+        _selectedFilter,
+        _selectedImageFilter,
+        _selectedVideoFilter,
+        _selectedAlbum
+    ) { date, imgExt, vidRes, albumId ->
+        FilterState(date, imgExt, vidRes, albumId)
+    }.distinctUntilChanged()
+     .flatMapLatest { state ->
+        val (date, imgExt, vidRes, albumId) = state
+        var startRange = 0L
+        var endRange = Long.MAX_VALUE
+        if (date != null && date != "Todos") {
+            try {
+                dateFormatter.parse(date)?.let { d ->
+                    val cal = Calendar.getInstance().apply { time = d }
+                    startRange = cal.timeInMillis
+                    cal.add(Calendar.MONTH, 1)
+                    endRange = cal.timeInMillis
+                }
+            } catch (e: Exception) {}
+        }
+
+        val mimeFilter = when {
+            imgExt != null -> "image/${imgExt.lowercase()}"
+            vidRes != null -> "video/%"
+            else -> "%"
+        }
+
+        val (minW, minH) = when(vidRes) {
+            "4K" -> 3840 to 2160
+            "2K" -> 2560 to 1440
+            "1080P" -> 1920 to 1080
+            "720P" -> 1280 to 720
+            else -> 0 to 0
+        }
+
+        Pager(
+            config = PagingConfig(
+                pageSize = 40,
+                prefetchDistance = 80,
+                initialLoadSize = 120,
+                enablePlaceholders = true
+            ),
+            pagingSourceFactory = { repository.getPagedItems("LOCAL", startRange, endRange, mimeFilter, albumId, minW, minH) }
+        ).flow.map { pagingData ->
+            pagingData.map { GalleryUiModel.Media(it.toDomain()) as GalleryUiModel }
+        }
     }.cachedIn(viewModelScope)
 
     private fun formatDate(timestamp: Long): String {
@@ -459,8 +547,54 @@ class GalleryViewModel @Inject constructor(
     }
 
     fun openViewer(item: MediaItem, index: Int) {
-        _viewerItem.value = item
-        _viewerIndex.value = index
+        viewModelScope.launch {
+            val date = _selectedFilter.value
+            val imgExt = _selectedImageFilter.value
+            val vidRes = _selectedVideoFilter.value
+            val albumId = _selectedAlbum.value
+
+            var startRange = 0L
+            var endRange = Long.MAX_VALUE
+            if (date != null && date != "Todos") {
+                try {
+                    dateFormatter.parse(date)?.let { d ->
+                        val cal = Calendar.getInstance().apply { time = d }
+                        startRange = cal.timeInMillis
+                        cal.add(Calendar.MONTH, 1)
+                        endRange = cal.timeInMillis
+                    }
+                } catch (e: Exception) {}
+            }
+
+            val mimeFilter = when {
+                imgExt != null -> "image/${imgExt.lowercase()}"
+                vidRes != null -> "video/%"
+                else -> "%"
+            }
+
+            val (minW, minH) = when(vidRes) {
+                "4K" -> 3840 to 2160
+                "2K" -> 2560 to 1440
+                "1080P" -> 1920 to 1080
+                "720P" -> 1280 to 720
+                else -> 0 to 0
+            }
+
+            val rank = repository.getMediaRank(item.id, "LOCAL", startRange, endRange, mimeFilter, albumId, minW, minH)
+            
+            _viewerItem.value = item
+            _viewerIndex.value = rank
+        }
+    }
+
+    fun rotateMedia(item: MediaItem) {
+        val newRotation = (item.rotation + 90f) % 360f
+        viewModelScope.launch {
+            repository.updateMediaRotation(item, newRotation)
+            // No necesitamos actualizar _viewerItem manualmente si el PagingSource emite de nuevo,
+            // pero para una respuesta instantánea en el visor actualizamos el estado local
+            _viewerItem.value = item.copy(rotation = newRotation)
+        }
     }
 
     fun syncGallery() {
@@ -505,6 +639,7 @@ class GalleryViewModel @Inject constructor(
     }
 
     private var pendingDeleteItems: List<MediaItem>? = null
+    private var pendingSecureItems: List<MediaItem>? = null
 
     @RequiresApi(Build.VERSION_CODES.Q)
     fun deleteSelectedMedia() {
@@ -538,6 +673,64 @@ class GalleryViewModel @Inject constructor(
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
+    fun secureSelectedMedia() {
+        viewModelScope.launch {
+            val selectedIds = _selectedMediaIds.value
+            val allItems = _allLoadedItems
+            val toSecure = allItems.filter { it.id in selectedIds }
+            
+            if (toSecure.isEmpty()) return@launch
+
+            _isSecuringMedia.value = true
+            try {
+                val result = repository.secureMediaItems(toSecure)
+                when (result) {
+                    is com.my_gallery.data.repository.DeleteResult.Success -> {
+                        _selectedMediaIds.value = emptySet()
+                        _isSelectionMode.value = false
+                        syncGallery()
+                    }
+                    is com.my_gallery.data.repository.DeleteResult.PermissionRequired -> {
+                         pendingSecureItems = toSecure 
+                         _pendingIntent.value = result.intentSender
+                    }
+                    is com.my_gallery.data.repository.DeleteResult.Error -> {
+                        // Handle error (show toast?)
+                    }
+                }
+            } finally {
+                _isSecuringMedia.value = false
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    fun unsecureSelectedMedia() {
+        viewModelScope.launch {
+            val selectedIds = _selectedMediaIds.value
+            val allItems = _allLoadedItems
+            val toUnsecure = allItems.filter { it.id in selectedIds && it.albumId == "SECURE_VAULT" }
+            
+            if (toUnsecure.isEmpty()) return@launch
+
+            _isUnsecuringMedia.value = true
+            try {
+                val result = repository.unsecureMediaItems(toUnsecure)
+                when (result) {
+                    is com.my_gallery.data.repository.DeleteResult.Success -> {
+                        _selectedMediaIds.value = emptySet()
+                        _isSelectionMode.value = false
+                        syncGallery()
+                    }
+                    else -> {}
+                }
+            } finally {
+                _isUnsecuringMedia.value = false
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
     fun onPermissionResult(success: Boolean) {
         _pendingIntent.value = null
         if (success) {
@@ -559,9 +752,19 @@ class GalleryViewModel @Inject constructor(
                      deleteSelectedMedia()
                 }
             }
+            pendingSecureItems?.let {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                     _selectedMediaIds.value = emptySet()
+                    _isSelectionMode.value = false
+                    syncGallery()
+                } else {
+                     secureSelectedMedia()
+                }
+            }
         }
         pendingRenameData = null
         pendingDeleteItems = null
+        pendingSecureItems = null
     }
 
     fun clearPendingIntent() {
@@ -633,6 +836,29 @@ class GalleryViewModel @Inject constructor(
         val inGroup = _allLoadedItems.filter { formatDate(it.dateAdded) == label }
         if (inGroup.isEmpty()) return false
         return inGroup.all { it.id in selectedIds }
+    }
+
+    fun areAllSelectedSecured(): Boolean {
+        val selectedIds = _selectedMediaIds.value
+        if (selectedIds.isEmpty()) return false
+        val selectedItems = _allLoadedItems.filter { it.id in selectedIds }
+        return selectedItems.isNotEmpty() && selectedItems.all { it.albumId == "SECURE_VAULT" }
+    }
+
+    suspend fun decryptMediaToCache(item: MediaItem): String? {
+        val file = repository.decryptMediaToCache(item.id, item.mimeType)
+        return file?.absolutePath
+    }
+
+    fun clearDecryptedCache() {
+        viewModelScope.launch {
+            repository.clearDecryptedCache()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        clearDecryptedCache()
     }
 }
 

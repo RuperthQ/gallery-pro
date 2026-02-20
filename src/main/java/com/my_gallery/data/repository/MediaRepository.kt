@@ -5,33 +5,61 @@ import android.content.Context
 import android.os.Build
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
+import androidx.exifinterface.media.ExifInterface
 import androidx.paging.PagingSource
 import com.my_gallery.data.local.dao.MediaDao
 import com.my_gallery.data.local.entity.MediaEntity
+import com.my_gallery.data.security.VaultMediaRepository
+import com.my_gallery.domain.model.AlbumItem
 import com.my_gallery.domain.model.MediaItem
+import com.my_gallery.utils.MediaDateParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-import com.my_gallery.domain.model.AlbumItem
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
-
 @Singleton
 class MediaRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val mediaDao: MediaDao
+    private val mediaDao: MediaDao,
+    private val vaultRepository: VaultMediaRepository
 ) {
+
+    val mediaChanges: Flow<Unit> = callbackFlow {
+        val observer = object : android.database.ContentObserver(null) {
+            override fun onChange(selfChange: Boolean) {
+                trySend(Unit)
+            }
+        }
+        
+        context.contentResolver.registerContentObserver(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            true,
+            observer
+        )
+        context.contentResolver.registerContentObserver(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            true,
+            observer
+        )
+
+        awaitClose {
+            context.contentResolver.unregisterContentObserver(observer)
+        }
+    }.flowOn(Dispatchers.IO)
 
     /**
      * Obtiene los álbumes (carpetas) locales con su miniatura más reciente.
      */
-    fun getLocalAlbums(): Flow<List<AlbumItem>> = flow {
+    fun getLocalAlbums(includeEmpty: Boolean = false): Flow<List<AlbumItem>> = flow {
         val albums = mutableMapOf<String, AlbumItem>()
         val projection = arrayOf(
             MediaStore.MediaColumns.BUCKET_ID,
@@ -61,7 +89,8 @@ class MediaRepository @Inject constructor(
                         val name = cursor.getString(bucketNameCol) ?: "Otros"
                         val id = cursor.getLong(idCol)
                         val contentUri = ContentUris.withAppendedId(uri, id).toString()
-                        albums[bucketId] = AlbumItem(bucketId, name, contentUri, 1)
+                        val rot = mediaDao.getRotationByUrl(contentUri) ?: 0f
+                        albums[bucketId] = AlbumItem(bucketId, name, contentUri, 1, rot)
                     } else {
                         val current = albums[bucketId]!!
                         albums[bucketId] = current.copy(count = current.count + 1)
@@ -69,6 +98,30 @@ class MediaRepository @Inject constructor(
                 }
             }
         }
+
+        if (includeEmpty) {
+            try {
+                val dcim = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DCIM)
+                val galleryPro = java.io.File(dcim, "Gallery_Pro")
+                if (galleryPro.exists() && galleryPro.isDirectory) {
+                    galleryPro.listFiles()?.filter { it.isDirectory }?.forEach { dir ->
+                        val bucketId = dir.absolutePath.hashCode().toString()
+                        if (!albums.containsKey(bucketId)) {
+                            // Es un álbum vacío
+                            albums[bucketId] = AlbumItem(
+                                id = bucketId,
+                                name = dir.name,
+                                thumbnail = "", // No thumbnail
+                                count = 0
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
         emit(albums.values.toList().sortedBy { it.name })
     }.flowOn(Dispatchers.IO)
 
@@ -123,12 +176,16 @@ class MediaRepository @Inject constructor(
                             val absolutePath = it.getString(dataCol)
                             val bucketId = it.getString(bucketIdCol)
                             
+                            val originalDate = it.getLong(dateCol) * 1000L
+                            val name = it.getString(nameCol) ?: "Local Media"
+                            val finalDate = MediaDateParser.parseDateFromFileName(name, originalDate)
+
                             allEntities.add(MediaEntity(
                                 id = "${typePrefix}_$id",
                                 url = contentUri,
                                 thumbnail = contentUri,
-                                title = it.getString(nameCol) ?: "Local Media",
-                                dateAdded = it.getLong(dateCol) * 1000L,
+                                title = name,
+                                dateAdded = finalDate,
                                 mimeType = it.getString(mimeCol) ?: "image/jpeg",
                                 size = it.getLong(sizeCol),
                                 width = it.getInt(widthCol),
@@ -143,8 +200,14 @@ class MediaRepository @Inject constructor(
                 
                 mediaDao.clearBySource("LOCAL")
                 
+                val vaultIds = mediaDao.getVaultIds().toSet()
+                
+                // Recobrar archivos que están en la bóveda física pero no en Room
+                syncVaultItems(vaultIds)
+                
                 if (allEntities.isNotEmpty()) {
-                    mediaDao.insertAll(allEntities)
+                    val filteredEntities = allEntities.filterNot { it.id in vaultIds }
+                    mediaDao.insertAll(filteredEntities)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -186,6 +249,25 @@ class MediaRepository @Inject constructor(
             else -> mimeType
         }
         return mediaDao.getMediaIds(source, start, end, searchMime, albumId, minWidth, minHeight)
+    }
+
+    suspend fun getMediaRank(
+        targetId: String,
+        source: String, 
+        start: Long, 
+        end: Long,
+        mimeType: String?,
+        albumId: String? = null,
+        minWidth: Int = 0,
+        minHeight: Int = 0
+    ): Int {
+        val searchMime = when {
+            mimeType == null || mimeType == "%" || mimeType == "Todas" -> "%"
+            mimeType.startsWith("image/") || mimeType.startsWith("video/") -> "$mimeType%"
+            !mimeType.contains("/") -> "%${mimeType.lowercase()}%"
+            else -> mimeType
+        }
+        return mediaDao.getMediaRank(targetId, source, start, end, searchMime, albumId, minWidth, minHeight)
     }
 
     fun getDistinctMimeTypes(source: String): Flow<List<String>> = mediaDao.getDistinctMimeTypes(source)
@@ -255,6 +337,39 @@ class MediaRepository @Inject constructor(
         }
     }
 
+    suspend fun updateMediaRotation(item: MediaItem, rotation: Float) = withContext(Dispatchers.IO) {
+        // 1. Persistencia en Base de Datos Local
+        mediaDao.updateRotation(item.id, rotation)
+
+        // 2. Persistencia Física (EXIF para Imágenes)
+        if (item.source == "LOCAL" && item.mimeType.startsWith("image/")) {
+            try {
+                val filePath = item.path ?: return@withContext
+                val file = java.io.File(filePath)
+                if (file.exists()) {
+                    val exifInterface = ExifInterface(filePath)
+                    val exifOrientation = when (rotation) {
+                        90f -> ExifInterface.ORIENTATION_ROTATE_90
+                        180f -> ExifInterface.ORIENTATION_ROTATE_180
+                        270f -> ExifInterface.ORIENTATION_ROTATE_270
+                        else -> ExifInterface.ORIENTATION_NORMAL
+                    }
+                    exifInterface.setAttribute(ExifInterface.TAG_ORIENTATION, exifOrientation.toString())
+                    exifInterface.saveAttributes()
+
+                    // 3. Notificar al sistema para actualizar la miniatura de MediaStore
+                    val contentValues = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Images.Media.ORIENTATION, rotation.toInt())
+                    }
+                    val uri = android.net.Uri.parse(item.url)
+                    context.contentResolver.update(uri, contentValues, null, null)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     suspend fun createAlbum(albumName: String): java.io.File? = withContext(Dispatchers.IO) {
         try {
             val dcim = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DCIM)
@@ -275,7 +390,21 @@ class MediaRepository @Inject constructor(
             var allSuccess = true
 
             items.forEach { item ->
-                if (item.path != null) {
+                if (item.albumId == "SECURE_VAULT") {
+                    // Si está en la bóveda, la acción de "mover" es en realidad "descifrar hacia la carpeta destino"
+                    val restoredUri = vaultRepository.restoreMedia(
+                        mediaId = item.id,
+                        fileName = if (item.title.startsWith("Recuperado_")) "${item.id}.${if(item.mimeType.contains("video")) "mp4" else "jpg"}" else item.title,
+                        mimeType = item.mimeType,
+                        originalAlbumId = item.originalAlbumId,
+                        targetAlbumName = albumName
+                    )
+                    if (restoredUri != null) {
+                        mediaDao.deleteById(item.id)
+                    } else {
+                        allSuccess = false
+                    }
+                } else if (item.path != null) {
                     val oldFile = java.io.File(item.path)
                     val newFile = java.io.File(targetDir, oldFile.name)
 
@@ -286,12 +415,16 @@ class MediaRepository @Inject constructor(
                             put(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME, albumName)
                             put(MediaStore.MediaColumns.BUCKET_ID, targetDir.absolutePath.hashCode().toString())
                         }
-                        context.contentResolver.update(
-                            android.net.Uri.parse(item.url),
-                            values,
-                            null,
-                            null
-                        )
+                        try {
+                            context.contentResolver.update(
+                                android.net.Uri.parse(item.url),
+                                values,
+                                null,
+                                null
+                            )
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                         android.media.MediaScannerConnection.scanFile(
                             context,
                             arrayOf(newFile.absolutePath),
@@ -318,7 +451,7 @@ class MediaRepository @Inject constructor(
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    suspend fun deleteMedia(items: List<MediaItem>): DeleteResult = withContext(Dispatchers.IO) {
+    suspend fun deleteMedia(items: List<MediaItem>, removeFromRoom: Boolean = true): DeleteResult = withContext(Dispatchers.IO) {
         try {
             val isManageAllFilesGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 android.os.Environment.isExternalStorageManager()
@@ -332,7 +465,7 @@ class MediaRepository @Inject constructor(
                     try {
                         val deleted = context.contentResolver.delete(android.net.Uri.parse(item.url), null, null)
                         if (deleted > 0) {
-                            mediaDao.deleteById(item.id)
+                            if (removeFromRoom) mediaDao.deleteById(item.id)
                             deletedCount++
                         }
                     } catch (e: Exception) {
@@ -358,7 +491,7 @@ class MediaRepository @Inject constructor(
                 for (item in items) {
                     try {
                         context.contentResolver.delete(android.net.Uri.parse(item.url), null, null)
-                        mediaDao.deleteById(item.id)
+                        if (removeFromRoom) mediaDao.deleteById(item.id)
                         deletedCount++
                     } catch (e: SecurityException) {
                         val recoverable = e as? android.app.RecoverableSecurityException
@@ -375,8 +508,128 @@ class MediaRepository @Inject constructor(
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
+    suspend fun secureMediaItems(items: List<MediaItem>): DeleteResult = withContext(Dispatchers.IO) {
+        try {
+            val successfullySecured = mutableListOf<MediaItem>()
+            
+            for (item in items) {
+                // 1. Encriptar y guardar en Bóveda Privada
+                val vaultFile = vaultRepository.secureMedia(android.net.Uri.parse(item.url), item.id)
+                if (vaultFile != null && vaultFile.exists()) {
+                    successfullySecured.add(item)
+                    // 2. Actualizar BD local apuntando al archivo en la bóveda
+                    // Y muy importante: cambiar la URL a vault:// para que Coil la intercepte
+                    mediaDao.updatePathAlbumAndUrl(
+                        id = item.id,
+                        newPath = vaultFile.absolutePath,
+                        newAlbumId = "SECURE_VAULT",
+                        newUrl = "vault://${item.id}",
+                        oldAlbumId = item.albumId
+                    )
+                }
+            }
+
+            if (successfullySecured.isEmpty()) {
+                return@withContext DeleteResult.Error("No se pudo asegurar ningún archivo.")
+            }
+
+            // 3. Eliminar los archivos públicos originales de MediaStore (sin eliminarlos de Room, porque ahora son SECURE_VAULT)
+            return@withContext deleteMedia(successfullySecured, removeFromRoom = false)
+            
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext DeleteResult.Error(e.message ?: "Error al encriptar medios")
+        }
+    }
+
+    suspend fun unsecureMediaItems(items: List<MediaItem>): DeleteResult = withContext(Dispatchers.IO) {
+        try {
+            var restoredCount = 0
+            
+            for (item in items) {
+                if (item.albumId == "SECURE_VAULT") {
+                    val restoredUri = vaultRepository.restoreMedia(item.id, item.title, item.mimeType, item.originalAlbumId)
+                    if (restoredUri != null) {
+                        restoredCount++
+                        // Para simplificar, lo borramos de Room y un resync(o carga lazy) lo actualizará en la UI.
+                        mediaDao.deleteById(item.id)
+                    }
+                }
+            }
+            
+            if (restoredCount == 0) {
+                return@withContext DeleteResult.Error("No se pudo restaurar ningún archivo.")
+            }
+            
+            return@withContext DeleteResult.Success(restoredCount)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext DeleteResult.Error(e.message ?: "Error al restaurar medios")
+        }
+    }
+
     suspend fun clearCache() {
         mediaDao.clearAll()
+    }
+
+    suspend fun getSecureVaultCount(): Int = withContext(Dispatchers.IO) {
+        mediaDao.getVaultCount()
+    }
+
+    suspend fun getSecureVaultThumbnail(): String? = withContext(Dispatchers.IO) {
+        mediaDao.getVaultLatestThumbnail()
+    }
+
+    suspend fun getLatestPublicThumbnail(): String? = withContext(Dispatchers.IO) {
+        mediaDao.getLatestPublicThumbnail()
+    }
+
+    private suspend fun syncVaultItems(existingVaultIds: Set<String>) = withContext(Dispatchers.IO) {
+        try {
+            val files = vaultRepository.getEncryptedFiles()
+            val missing = files.filter { it.name.removeSuffix(".enc") !in existingVaultIds }
+            
+            if (missing.isNotEmpty()) {
+                val recoveredEntities = missing.map { file ->
+                    val id = file.name.removeSuffix(".enc")
+                    val isVideo = id.startsWith("vid")
+                    val originalDate = file.lastModified()
+                    val finalDate = MediaDateParser.parseDateFromFileName(id, originalDate)
+
+                    MediaEntity(
+                        id = id,
+                        url = "vault://$id",
+                        thumbnail = "vault://$id",
+                        title = "Recuperado_$id",
+                        dateAdded = finalDate,
+                        mimeType = if (isVideo) "video/mp4" else "image/jpeg",
+                        size = file.length(),
+                        width = 0,
+                        height = 0,
+                        source = "LOCAL",
+                        path = file.absolutePath,
+                        albumId = "SECURE_VAULT"
+                    )
+                }
+                mediaDao.insertAll(recoveredEntities)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun decryptMediaToCache(mediaId: String, mimeType: String): java.io.File? {
+        val ext = if (mimeType.contains("/")) mimeType.substringAfterLast("/") else "mp4"
+        return vaultRepository.decryptMediaToCache(mediaId, ext)
+    }
+
+    suspend fun clearDecryptedCache() {
+        withContext(Dispatchers.IO) {
+            context.cacheDir.listFiles { file -> file.name.startsWith("decrypted_") }?.forEach {
+                it.delete()
+            }
+        }
     }
 }
 

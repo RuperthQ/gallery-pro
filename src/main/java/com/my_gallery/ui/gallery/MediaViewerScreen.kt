@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -139,6 +140,12 @@ fun MediaViewerScreen(
         }
     }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.clearDecryptedCache()
+        }
+    }
+
     // Sincronización: Cuando el pager cambia, el carrusel de abajo centra la miniatura activa
     LaunchedEffect(pagerState.currentPage) {
         val itemSizePx = with(density) { GalleryDesign.ViewerThumbSize.toPx() }
@@ -159,7 +166,10 @@ fun MediaViewerScreen(
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            userScrollEnabled = !isLocked && globalScale <= 1f, // BLOQUEO: Si está bloqueado o hay zoom, no hay swipe
+            // BLOQUEO corregido: Si hay zoom impedimos el swipe. 
+            // Además bloqueamos el swipe hacia ATRÁS si estamos en la primera página para evitar el efecto de carga/bouncing.
+            userScrollEnabled = !isLocked && (globalScale <= 1.05f) && 
+                !(pagerState.currentPage == 0 && pagerState.currentPageOffsetFraction < 0), 
             pageSpacing = GalleryDesign.PaddingLarge
         ) { pageIndex ->
             val uiModel = items[pageIndex]
@@ -203,24 +213,46 @@ fun MediaViewerScreen(
                                     )
                                 }
                         ) {
-                            VideoPlayer(
-                                videoUrl = uiModel.item.url,
-                                videoWidth = uiModel.item.width,
-                                videoHeight = uiModel.item.height,
-                                autoplayEnabled = autoplayEnabled,
-                                isActive = pagerState.currentPage == pageIndex,
-                                isFullScreen = isFullScreen,
-                                showControls = uiVisible,
-                                onFullScreenChange = { isFullScreen = it },
-                                onControlsVisibilityChange = { if (!isLocked) uiVisible = it },
-                                onVideoOrientationDetected = { currentVideoIsHorizontal = it },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            val isActive = pagerState.currentPage == pageIndex
+                            val videoUrlToPlay by produceState<String?>(initialValue = null, key1 = uiModel.item.url, key2 = isActive) {
+                                if (isActive) {
+                                    if (uiModel.item.url.startsWith("vault://")) {
+                                        value = viewModel.decryptMediaToCache(uiModel.item)
+                                    } else {
+                                        value = uiModel.item.url
+                                    }
+                                } else {
+                                    value = null
+                                }
+                            }
+
+                            if (videoUrlToPlay == null && uiModel.item.url.startsWith("vault://") && isActive) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                }
+                            } else if (videoUrlToPlay != null) {
+                                VideoPlayer(
+                                    videoUrl = videoUrlToPlay!!,
+                                    videoWidth = uiModel.item.width,
+                                    videoHeight = uiModel.item.height,
+                                    autoplayEnabled = autoplayEnabled,
+                                    isActive = isActive,
+                                    isFullScreen = isFullScreen,
+                                    showControls = uiVisible,
+                                    onFullScreenChange = { isFullScreen = it },
+                                    onControlsVisibilityChange = { if (!isLocked) uiVisible = it },
+                                    onVideoOrientationDetected = { currentVideoIsHorizontal = it },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
                     } else {
+                        val currentItem = (uiModel as? GalleryUiModel.Media)?.item
                         ZoomableImage(
                              item = uiModel.item,
+                             rotation = currentItem?.rotation ?: 0f,
                              onScaleChange = { globalScale = it },
+                             onRotate = { viewModel.rotateMedia(uiModel.item) },
                              onTap = { 
                                  if (isLocked) showUnlockOverlay = true 
                                  else uiVisible = !uiVisible 
@@ -348,7 +380,11 @@ fun MediaViewerScreen(
                                             model = thumbModel.item.thumbnail,
                                             contentDescription = null,
                                             contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize().alpha(if (isSelected) 1f else 0.5f)
+                                            modifier = Modifier.fillMaxSize()
+                                                .alpha(if (isSelected) 1f else 0.5f)
+                                                .graphicsLayer {
+                                                    rotationZ = thumbModel.item.rotation
+                                                }
                                         )
 
                                         if (thumbModel.item.mimeType.startsWith("video/")) {
@@ -399,6 +435,15 @@ fun MediaViewerScreen(
                     showToggle = true,
                     onClick = { 
                         viewModel.toggleAutoplay()
+                    }
+                ),
+                PremiumMenuItem(
+                    label = "Rotar",
+                    icon = Icons.Default.RotateRight,
+                    onClick = { 
+                        val currentMedia = (items[pagerState.currentPage] as? GalleryUiModel.Media)?.item
+                        currentMedia?.let { viewModel.rotateMedia(it) }
+                        showMenu = false
                     }
                 )
             )
@@ -489,7 +534,9 @@ fun MediaViewerScreen(
 @Composable
 fun ZoomableImage(
     item: MediaItem,
+    rotation: Float = 0f,
     onScaleChange: (Float) -> Unit,
+    onRotate: () -> Unit = {},
     onTap: () -> Unit,
     onLongPress: () -> Unit
 ) {
@@ -502,11 +549,32 @@ fun ZoomableImage(
         onScaleChange(scale)
     }
 
+    val isRotated = (rotation % 180f) != 0f
+    val rotationScale = remember(rotation, viewportSize, imageIntrinsicSize) {
+        if (viewportSize == IntSize.Zero || imageIntrinsicSize == Size.Zero || !isRotated) 1f
+        else {
+            val containerW = viewportSize.width.toFloat()
+            val containerH = viewportSize.height.toFloat()
+            val imgW = imageIntrinsicSize.width
+            val imgH = imageIntrinsicSize.height
+            val scaleFitOrig = min(containerW / imgW, containerH / imgH)
+            val scaleFitRotated = min(containerW / imgH, containerH / imgW)
+            scaleFitRotated / scaleFitOrig
+        }
+    }
+
     fun calculateBoundOffset(newOffset: Offset, currentScale: Float): Offset {
-        if (currentScale <= 1f || viewportSize == IntSize.Zero || imageIntrinsicSize == Size.Zero) return Offset.Zero
-        val ratio = min(viewportSize.width.toFloat() / imageIntrinsicSize.width, viewportSize.height.toFloat() / imageIntrinsicSize.height)
-        val fittedWidth = imageIntrinsicSize.width * ratio
-        val fittedHeight = imageIntrinsicSize.height * ratio
+        val totalScale = currentScale * rotationScale
+        if (totalScale <= 1f || viewportSize == IntSize.Zero || imageIntrinsicSize == Size.Zero) return Offset.Zero
+        
+        // Dimensiones ajustadas post-rotación
+        val imgW = if (isRotated) imageIntrinsicSize.height else imageIntrinsicSize.width
+        val imgH = if (isRotated) imageIntrinsicSize.width else imageIntrinsicSize.height
+        
+        val ratio = min(viewportSize.width.toFloat() / imgW, viewportSize.height.toFloat() / imgH)
+        val fittedWidth = imgW * ratio
+        val fittedHeight = imgH * ratio
+        
         val maxX = maxOf(0f, (fittedWidth * currentScale - viewportSize.width) / 2f)
         val maxY = maxOf(0f, (fittedHeight * currentScale - viewportSize.height) / 2f)
         return Offset(newOffset.x.coerceIn(-maxX, maxX), newOffset.y.coerceIn(-maxY, maxY))
@@ -537,6 +605,7 @@ fun ZoomableImage(
                 awaitEachGesture {
                     var zoom = 1f
                     var pan = Offset.Zero
+                    var rotationSum = 0f
                     var pastTouchSlop = false
                     val touchSlop = viewConfiguration.touchSlop
 
@@ -546,20 +615,31 @@ fun ZoomableImage(
                         if (!canceled) {
                             val zoomChange = event.calculateZoom()
                             val panChange = event.calculatePan()
+                            val rotationChange = event.calculateRotation()
 
                             if (!pastTouchSlop) {
                                 zoom *= zoomChange
                                 pan += panChange
+                                rotationSum += rotationChange
                                 val centroidSize = event.calculateCentroidSize(useCurrent = false)
                                 val zoomMotion = kotlin.math.abs(1 - zoom) * centroidSize
                                 val panMotion = pan.getDistance()
+                                val rotationMotion = kotlin.math.abs(rotationSum)
 
-                                if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                                if (zoomMotion > touchSlop || panMotion > touchSlop || rotationMotion > 10f) {
                                     pastTouchSlop = true
                                 }
                             }
 
                             if (pastTouchSlop) {
+                                // GESTO DE ROTACIÓN DIRECTO:
+                                // Si detectamos una rotación significativa (> 35 grados en el gesto actual), 
+                                // disparamos la rotación persistente.
+                                if (kotlin.math.abs(rotationSum) > 35f) {
+                                    onRotate() 
+                                    rotationSum = 0f 
+                                }
+
                                 // Solo consumimos si estamos haciendo zoom o si ya estamos ampliados
                                 if (scale > 1.01f || zoomChange > 1.01f) {
                                     val newScale = (scale * zoomChange).coerceIn(1f, GalleryDesign.ViewerScaleLimit)
@@ -587,15 +667,18 @@ fun ZoomableImage(
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(item.url)
+                .setParameter("is_full_res", true)
                 .crossfade(GalleryDesign.ViewerAnimNormal)
                 .build(),
             contentDescription = null,
             onState = { if (it is coil.compose.AsyncImagePainter.State.Success) imageIntrinsicSize = it.painter?.intrinsicSize ?: Size.Zero },
             modifier = Modifier.fillMaxSize().graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                val finalScale = scale * rotationScale
+                scaleX = finalScale
+                scaleY = finalScale
                 translationX = offset.x
                 translationY = offset.y
+                rotationZ = rotation
             },
             contentScale = ContentScale.Fit
         )

@@ -5,20 +5,22 @@ import com.my_gallery.ui.gallery.GalleryViewModel
 class HeaderActionsOrchestrator(
     private val viewModel: GalleryViewModel
 ) {
-    fun getNormalActions(showFilters: Boolean): List<HeaderAction> {
+    fun getNormalActions(showFilters: Boolean, showEmptyAlbums: Boolean): List<HeaderAction> {
         return listOf(
             CreateAlbumAction(viewModel)(),
             ChangeGridAction(viewModel)(),
             ToggleFilterAction(viewModel, showFilters)(),
+            ToggleEmptyAlbumsAction(viewModel, showEmptyAlbums)(),
             ToggleSelectionAction(viewModel)()
         )
     }
 
-    fun getSelectionActions(isAlbumCreationPending: Boolean, selectedCount: Int): List<HeaderAction> {
+    fun getSelectionActions(isAlbumCreationPending: Boolean, selectedCount: Int, areAllSecured: Boolean): List<HeaderAction> {
         return if (isAlbumCreationPending) {
             listOf(SaveAlbumAction(viewModel)())
         } else if (selectedCount > 0) {
             listOf(
+                if (areAllSecured) UnsecureAction(viewModel)() else SecureAction(viewModel)(),
                 MoveToAlbumAction(viewModel)(),
                 DeleteAction(viewModel)()
             )

@@ -33,10 +33,18 @@ import com.my_gallery.ui.gallery.filters.GalleryFilter
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 
+import com.my_gallery.ui.security.SecurityViewModel
+import com.my_gallery.ui.security.BiometricPromptManager
+import androidx.fragment.app.FragmentActivity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+
 @Composable
 fun HeaderLayout(
     showFilters: Boolean,
     viewModel: GalleryViewModel,
+    securityViewModel: SecurityViewModel,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -51,13 +59,35 @@ fun HeaderLayout(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
-                Text(
-                    text = "Mi Galería",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            val context = LocalContext.current
+            val isAppLocked by securityViewModel.isAppLocked.collectAsStateWithLifecycle(initialValue = false)
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Título eliminado a petición del usuario
+                
+                IconButton(onClick = {
+                    if (isAppLocked) {
+                        val biom = (context as? FragmentActivity)?.let { BiometricPromptManager(it) }
+                        if (biom?.canAuthenticate() == true) {
+                            biom.authenticate(
+                                title = "Desactivar bloqueo",
+                                subtitle = "Autorización requerida",
+                                onSuccess = { securityViewModel.toggleAppLock(false) },
+                                onError = { /* opcional alert */ }
+                            )
+                        } else {
+                            securityViewModel.toggleAppLock(false)
+                        }
+                    } else {
+                        securityViewModel.toggleAppLock(true)
+                    }
+                }) {
+                    Icon(
+                        imageVector = if (isAppLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                        contentDescription = "Bloquear App",
+                        tint = if (isAppLocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
             }
 
             HeaderActionsRow(viewModel, showFilters)
@@ -102,10 +132,12 @@ fun SelectionModeActions(viewModel: GalleryViewModel, selectedCount: Int) {
 
     // Main Actions
     Row(horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall)) {
-        val actions = orchestrator.getSelectionActions(isAlbumCreationPending, selectedCount)
+        val areAllSecured = viewModel.areAllSelectedSecured()
+        val actions = orchestrator.getSelectionActions(isAlbumCreationPending, selectedCount, areAllSecured)
         actions.forEach { action ->
             val tint = if (action.description == "Eliminar") MaterialTheme.colorScheme.error 
                       else if (action.description == "Mover") MaterialTheme.colorScheme.tertiary
+                      else if (action.description == "Asegurar" || action.description == "Desbloquear") MaterialTheme.colorScheme.secondary
                       else MaterialTheme.colorScheme.primary
             
             val bg = tint.copy(alpha = 0.2f)
@@ -131,11 +163,16 @@ fun SelectionModeActions(viewModel: GalleryViewModel, selectedCount: Int) {
 @Composable
 fun NormalModeActions(viewModel: GalleryViewModel, showFilters: Boolean) {
     val orchestrator = remember(viewModel) { HeaderActionsOrchestrator(viewModel) }
-    val actions = orchestrator.getNormalActions(showFilters)
+    val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsStateWithLifecycle()
+    val actions = orchestrator.getNormalActions(showFilters, showEmptyAlbums)
 
     actions.forEachIndexed { index, action ->
         if (index > 0) Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
-        HeaderActionButton(action)
+        HeaderActionButton(
+            action = action,
+            tint = if (action.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            backgroundColor = if (action.isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
     }
 }
 

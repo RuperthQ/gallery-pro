@@ -11,6 +11,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Sistema de Diseño Premium para la Galeria Pro.
@@ -23,6 +24,8 @@ object GalleryDesign {
     val PaddingMedium = 10.dp
     val PaddingSmall = 8.dp
     val PaddingTiny = 4.dp
+    val PaddingCarouselHorizontal = 12.dp
+    val OffsetCarouselBase = 7.dp
     
     val PaddingViewerLockH = 64.dp
     val PaddingViewerLockV = 12.dp
@@ -44,6 +47,12 @@ object GalleryDesign {
     val HeaderVerticalSpacing = 4.dp // Espacio interno compacto de la fila superior
     val ButtonHeight = 38.dp // Altura fija para consistencia de pills
     val BorderWidthBold = 2.dp // Borde solicitado
+    
+    val CarouselItemWidth = 74.dp
+    val CarouselImageSize = 68.dp
+    val CarouselImagePadding = 3.dp
+    
+    val LetterSpacingSmall = 0.4.sp
 
     // --- Formas (Shapes) ---
     val CornerRadiusLarge = 20.dp
@@ -107,6 +116,8 @@ object GalleryDesign {
     val ViewerScalePagerDown = 0.88f
     val ViewerScaleMax = 3f
     val ViewerScaleLimit = 5f
+    
+    val ScaleCarouselSelected = 1.05f
     @Composable
     fun primaryGradient() = Brush.linearGradient(
         colors = listOf(

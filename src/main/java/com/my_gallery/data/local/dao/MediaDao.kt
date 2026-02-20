@@ -13,6 +13,12 @@ interface MediaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<MediaEntity>)
 
+    @Query("DELETE FROM media_items WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
+
+    @Query("SELECT id FROM media_items WHERE source = :source")
+    suspend fun getAllIdsBySource(source: String): List<String>
+
     @Query("""
         SELECT * FROM media_items 
         WHERE source = :source 
@@ -59,8 +65,24 @@ interface MediaDao {
         minHeight: Int = 0
     ): Int
 
+    @Query("SELECT * FROM media_items WHERE id IN (:ids)")
+    suspend fun getMediaByIds(ids: List<String>): List<MediaEntity>
+
     @Query("""
         SELECT id FROM media_items 
+        WHERE source = :source 
+        AND strftime('%m-%Y', datetime(dateAdded/1000, 'unixepoch')) = :period
+        AND mimeType LIKE :mimeType 
+        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
+    """)
+    suspend fun getMediaIdsByPeriod(
+        source: String,
+        period: String,
+        mimeType: String,
+        albumId: String? = null
+    ): List<String>
+
+    @Query("""SELECT id FROM media_items
         WHERE source = :source 
         AND dateAdded >= :start AND dateAdded < :end 
         AND mimeType LIKE :mimeType 

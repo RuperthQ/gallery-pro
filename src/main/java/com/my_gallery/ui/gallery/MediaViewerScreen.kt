@@ -1,7 +1,12 @@
 package com.my_gallery.ui.gallery
 
 import android.app.Activity
+import android.content.Context
 import android.content.pm.ActivityInfo
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -29,6 +34,8 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import android.view.WindowManager
+import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -54,6 +61,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.paging.compose.LazyPagingItems
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -88,6 +96,22 @@ fun MediaViewerScreen(
     val autoplayEnabled by viewModel.autoplayEnabled.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(initialPage = initialIndex) { items.itemCount }
     val thumbnailListState = rememberLazyListState()
+    
+    // --- MEJORA DE SEGURIDAD: Protección contra capturas de pantalla ---
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val isVaultItem = item.albumId == "SECURE_VAULT"
+    
+    DisposableEffect(isVaultItem) {
+        if (isVaultItem) {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        onDispose {
+            if (isVaultItem) {
+                activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+        }
+    }
 
     // BackHandler inteligente: Lock > Menu > Pantalla Completa > Cerrar
     androidx.activity.compose.BackHandler(enabled = true) {
@@ -137,6 +161,39 @@ fun MediaViewerScreen(
             controller.show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
             // Al salir de FS, restauramos la orientación por si acaso
             (view.context as? Activity)?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // --- MEJORA DE SEGURIDAD: Botón de Pánico (Shake to Lock) ---
+    DisposableEffect(isVaultItem) {
+        if (!isVaultItem) return@DisposableEffect onDispose {}
+        
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        
+        var lastShakeTime = 0L
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+                
+                val acceleration = kotlin.math.sqrt(x*x + y*y + z*z) - SensorManager.GRAVITY_EARTH
+                if (acceleration > 12f) { // Umbral de agitación
+                    val now = System.currentTimeMillis()
+                    if (now - lastShakeTime > 500) {
+                        lastShakeTime = now
+                        onClose() // Cerrar inmediatamente
+                        viewModel.clearDecryptedCache()
+                    }
+                }
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+        
+        sensorManager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
+        onDispose {
+            sensorManager.unregisterListener(listener)
         }
     }
 
@@ -259,6 +316,20 @@ fun MediaViewerScreen(
                              },
                              onLongPress = { if (!isLocked) showMenu = true }
                          )
+                    }
+
+                    // --- MEJORA DE SEGURIDAD: Marca de Agua Dinámica ---
+                    if (uiModel.item.albumId == "SECURE_VAULT") {
+                        DynamicWatermark(
+                            text = "CONFIDENCIAL - ${android.os.Build.MODEL}",
+                            alpha = 0.15f
+                        )
+                        
+                        // Protección Anti-Cámara (Flicker)
+                        FlickerShield()
+                        
+                        // Filtro de Privacidad (Anti-Espía)
+                        PrivacyFilter()
                     }
                 }
             } else {
@@ -762,5 +833,81 @@ fun Modifier.rotatingPremiumBorder(
                 cap = StrokeCap.Round
             )
         )
+    }
+}
+@Composable
+fun DynamicWatermark(
+    text: String,
+    alpha: Float = 0.12f
+) {
+    // Usamos el color onSurface pero con transparencia
+    val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    
+    // Convertimos dp a px para el motor nativo de Canvas
+    val textSizePx = with(density) { 24.sp.toPx() }
+    val stepXPx = with(density) { 250.dp.toPx() }
+    val stepYPx = with(density) { 180.dp.toPx() }
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val paint = android.graphics.Paint().apply {
+            this.textSize = textSizePx
+            this.color = android.graphics.Color.WHITE
+            this.alpha = (alpha * 255).toInt()
+            this.textAlign = android.graphics.Paint.Align.CENTER
+            this.isAntiAlias = true
+            this.typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            // Sombra para que se vea en fondos blancos
+            this.setShadowLayer(5f, 0f, 0f, android.graphics.Color.BLACK)
+        }
+
+        rotate(-35f) {
+            // Ampliamos el rango para cubrir toda la pantalla rotada
+            for (x in -500..size.width.toInt() + 1000 step stepXPx.toInt()) {
+                for (y in -500..size.height.toInt() + 1000 step stepYPx.toInt()) {
+                    drawContext.canvas.nativeCanvas.drawText(
+                        text,
+                        x.toFloat(),
+                        y.toFloat(),
+                        paint
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FlickerShield() {
+    val infiniteTransition = rememberInfiniteTransition(label = "flicker")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 0.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(16, easing = LinearEasing), // ~60Hz flicker
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = alpha))
+    )
+}
+
+@Composable
+fun PrivacyFilter() {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val step = 4.dp.toPx()
+        for (x in 0..size.width.toInt() step step.toInt()) {
+            drawLine(
+                color = Color.Black.copy(alpha = 0.05f),
+                start = Offset(x.toFloat(), 0f),
+                end = Offset(x.toFloat(), size.height),
+                strokeWidth = 1.dp.toPx()
+            )
+        }
     }
 }

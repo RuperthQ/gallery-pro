@@ -1,7 +1,10 @@
 package com.my_gallery.ui.security
 
 import androidx.fragment.app.FragmentActivity
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
@@ -56,11 +59,22 @@ fun AppLockScreen(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(GalleryDesign.PaddingLarge)
         ) {
+            @OptIn(ExperimentalFoundationApi::class)
             Icon(
                 imageVector = Icons.Default.Lock,
                 contentDescription = "Pantalla Bloqueada",
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(80.dp)
+                modifier = Modifier
+                    .size(80.dp)
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                        onLongClick = {
+                            viewModel.enterDecoyMode()
+                            onAuthenticated()
+                        }
+                    )
             )
 
             Spacer(modifier = Modifier.height(GalleryDesign.PaddingMedium))

@@ -21,6 +21,8 @@ class SecurityViewModel @Inject constructor(
     private val _isAuthenticated = MutableStateFlow(false)
     val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
 
+    val isDecoyMode = securityRepository.isDecoyMode
+
     private val _authError = MutableStateFlow<String?>(null)
     val authError: StateFlow<String?> = _authError.asStateFlow()
 
@@ -54,5 +56,17 @@ class SecurityViewModel @Inject constructor(
 
     fun isAlbumLocked(albumId: String): Boolean {
         return securityRepository.isAlbumLocked(albumId)
+    }
+
+    fun logout() {
+        if (securityRepository.isAppLocked.value) {
+            _isAuthenticated.value = false
+            securityRepository.setDecoyMode(false)
+        }
+    }
+
+    fun enterDecoyMode() {
+        securityRepository.setDecoyMode(true)
+        _isAuthenticated.value = true
     }
 }

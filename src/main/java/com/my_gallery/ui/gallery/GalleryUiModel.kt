@@ -12,6 +12,7 @@ sealed class GalleryUiModel {
         val dateLabel: String,
         val totalCount: Int = 0,
         val imageCount: Int = 0,
-        val videoCount: Int = 0
+        val videoCount: Int = 0,
+        val period: String
     ) : GalleryUiModel()
 }

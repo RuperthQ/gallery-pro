@@ -198,21 +198,50 @@ class MediaRepository @Inject constructor(
                     }
                 }
                 
-                mediaDao.clearBySource("LOCAL")
+                // Sincronización Incremental:
+                // 1. Obtener IDs actuales de Room para esta fuente
+                val roomIds = mediaDao.getAllIdsBySource("LOCAL").toSet()
                 
+                // 2. IDs que tenemos ahora desde MediaStore
+                val mediaStoreIds = allEntities.map { it.id }.toSet()
+                
+                // 3. Identificar huérfanos (están en Room pero ya no en MediaStore)
+                // Ojo: No borrar los de la bóveda
                 val vaultIds = mediaDao.getVaultIds().toSet()
+                val orphans = roomIds.filter { it !in mediaStoreIds && it !in vaultIds }
                 
-                // Recobrar archivos que están en la bóveda física pero no en Room
+                // 4. Recobrar archivos que están en la bóveda física pero no en Room
                 syncVaultItems(vaultIds)
+                
+                // 5. Borrar huérfanos y Upsert de los nuevos/cambiados
+                if (orphans.isNotEmpty()) {
+                    mediaDao.deleteByIds(orphans)
+                }
                 
                 if (allEntities.isNotEmpty()) {
                     val filteredEntities = allEntities.filterNot { it.id in vaultIds }
-                    mediaDao.insertAll(filteredEntities)
+                    // Dividir en trozos para evitar límites de SQLITE_MAX_VARIABLE_NUMBER
+                    filteredEntities.chunked(500).forEach { chunk ->
+                        mediaDao.insertAll(chunk)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
+    }
+
+    suspend fun getMediaByIds(ids: List<String>): List<MediaItem> = withContext(Dispatchers.IO) {
+        mediaDao.getMediaByIds(ids).map { it.toDomain() }
+    }
+
+    suspend fun getMediaIdsByPeriod(
+        source: String,
+        period: String,
+        mimeType: String,
+        albumId: String? = null
+    ): List<String> = withContext(Dispatchers.IO) {
+        mediaDao.getMediaIdsByPeriod(source, period, mimeType, albumId)
     }
 
     fun getPagedItems(

@@ -1,9 +1,11 @@
 package com.my_gallery.ui.gallery
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
@@ -73,6 +75,7 @@ import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.glassBackground
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 
+@RequiresApi(Build.VERSION_CODES.Q)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GalleryScreen(
@@ -254,14 +257,14 @@ fun GalleryScreen(
                         is GalleryUiModel.Separator -> {
                             val metadata by viewModel.sectionMetadata.collectAsStateWithLifecycle()
                             val isChecked = remember(selectedMediaIds, model.dateLabel) {
-                                viewModel.isGroupSelected(model.dateLabel, selectedMediaIds)
+                                viewModel.isGroupSelected(model.dateLabel, model.period, selectedMediaIds)
                             }
                             // Pass metadata to header
                             SectionHeader(
                                 label = model.dateLabel,
                                 metadata = metadata[model.dateLabel],
                                 isChecked = isChecked,
-                                onToggleCheck = { viewModel.toggleGroupSelection(model.dateLabel) }
+                                onToggleCheck = { viewModel.toggleGroupSelection(model.dateLabel, model.period) }
                             )
                         }
                         is GalleryUiModel.Media -> {

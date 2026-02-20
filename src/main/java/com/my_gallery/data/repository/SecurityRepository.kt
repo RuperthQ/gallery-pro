@@ -54,6 +54,13 @@ class SecurityRepository @Inject constructor(
         return prefs.getStringSet(KEY_LOCKED_ALBUMS, emptySet())?.toSet() ?: emptySet()
     }
 
+    private val _isDecoyMode = MutableStateFlow(false)
+    val isDecoyMode: StateFlow<Boolean> = _isDecoyMode.asStateFlow()
+
+    fun setDecoyMode(enabled: Boolean) {
+        _isDecoyMode.value = enabled
+    }
+
     companion object {
         private const val KEY_APP_LOCKED = "KEY_APP_LOCKED"
         private const val KEY_LOCKED_ALBUMS = "KEY_LOCKED_ALBUMS"

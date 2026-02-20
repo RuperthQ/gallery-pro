@@ -10,6 +10,12 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import okhttp3.OkHttpClient
 import com.my_gallery.data.coil.MediaStoreThumbnailFetcher
+import com.my_gallery.data.security.VaultMediaFetcher
+import com.my_gallery.data.security.VaultMediaRepository
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 
 @HiltAndroidApp
 class GalleryApplication : Application(), ImageLoaderFactory {
@@ -20,7 +26,17 @@ class GalleryApplication : Application(), ImageLoaderFactory {
         }
     }
 
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface VaultRepositoryEntryPoint {
+        fun vaultRepository(): VaultMediaRepository
+    }
+
     override fun newImageLoader(): ImageLoader {
+        val vaultRepository = EntryPointAccessors.fromApplication(
+            this, VaultRepositoryEntryPoint::class.java
+        ).vaultRepository()
+
         return ImageLoader.Builder(this)
             .memoryCache {
                 MemoryCache.Builder(this)
@@ -37,6 +53,8 @@ class GalleryApplication : Application(), ImageLoaderFactory {
             .components {
                 // Priorizar el fetcher de miniaturas de Android para fotos locales
                 add(MediaStoreThumbnailFetcher.Factory(contentResolver))
+                // Agregar Fetcher para la bóveda segura
+                add(VaultMediaFetcher(vaultRepository, this@GalleryApplication))
             }
             .crossfade(true)
             .allowHardware(true)

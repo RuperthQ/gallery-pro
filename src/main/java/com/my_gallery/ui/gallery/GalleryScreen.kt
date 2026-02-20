@@ -1,8 +1,11 @@
 package com.my_gallery.ui.gallery
 
+import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
@@ -24,6 +27,10 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +65,9 @@ import com.my_gallery.ui.gallery.components.HeaderLayout
 import com.my_gallery.ui.gallery.components.LoadingOverlay
 import com.my_gallery.ui.gallery.components.MetadataSheetContent
 import com.my_gallery.ui.gallery.components.MoveToAlbumDialog
+import com.my_gallery.ui.security.BiometricPromptManager
+import androidx.fragment.app.FragmentActivity
+import com.my_gallery.ui.security.SecurityViewModel
 import com.my_gallery.ui.gallery.components.PermissionBanner
 import com.my_gallery.ui.gallery.components.PremiumAlbumCarousel
 import com.my_gallery.ui.gallery.components.SectionHeader
@@ -65,10 +75,12 @@ import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.glassBackground
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 
+@RequiresApi(Build.VERSION_CODES.Q)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GalleryScreen(
-    viewModel: GalleryViewModel = hiltViewModel()
+    viewModel: GalleryViewModel = hiltViewModel(),
+    securityViewModel: SecurityViewModel = hiltViewModel()
 ) {
     val columnCount by viewModel.columnCount.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
@@ -79,6 +91,7 @@ fun GalleryScreen(
     val isEditPermissionGranted by viewModel.isEditPermissionGranted.collectAsStateWithLifecycle()
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val selectedAlbum by viewModel.selectedAlbum.collectAsStateWithLifecycle()
+    val lockedAlbums by securityViewModel.lockedAlbums.collectAsStateWithLifecycle(initialValue = emptySet<String>())
     
     val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
     val selectedMediaIds by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
@@ -87,6 +100,8 @@ fun GalleryScreen(
     
     val items: LazyPagingItems<GalleryUiModel> =
         viewModel.pagedItems.collectAsLazyPagingItems()
+    val viewerItems: LazyPagingItems<GalleryUiModel> =
+        viewModel.viewerPagingData.collectAsLazyPagingItems()
     val animatedColumns by animateIntAsState(targetValue = columnCount, label = "columnAnim")
 
     val intentSenderLauncher = rememberLauncherForActivityResult(
@@ -99,6 +114,10 @@ fun GalleryScreen(
         }
     }
 
+    BackHandler(enabled = isSelectionMode && viewerItem == null) {
+        viewModel.exitSelection()
+    }
+
     val sheetState = rememberModalBottomSheetState()
 
     val context = LocalContext.current
@@ -107,6 +126,19 @@ fun GalleryScreen(
     ) { permissions ->
         if (permissions.values.all { it }) {
             viewModel.syncGallery()
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.`Event`.ON_RESUME) {
+                viewModel.checkEditPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -149,6 +181,7 @@ fun GalleryScreen(
                 HeaderLayout(
                     showFilters = showFilters,
                     viewModel = viewModel,
+                    securityViewModel = securityViewModel,
                     modifier = Modifier.alpha(0f)
                 )
             }
@@ -158,7 +191,41 @@ fun GalleryScreen(
                     PremiumAlbumCarousel(
                         albums = albums,
                         selectedAlbumId = selectedAlbum,
-                        onAlbumClick = { viewModel.toggleAlbum(it.id) }
+                        onAlbumClick = { albumInfo ->
+                            if (albumInfo.id != "ALL_VIRTUAL_ALBUM" && securityViewModel.isAlbumLocked(albumInfo.id)) {
+                                val biom = (context as? FragmentActivity)?.let { BiometricPromptManager(it) }
+                                if (biom?.canAuthenticate() == true) {
+                                    biom.authenticate(
+                                        title = "Álbum Privado",
+                                        subtitle = "Desbloquea este álbum",
+                                        onSuccess = { viewModel.toggleAlbum(albumInfo.id) },
+                                        onError = { /* Opcional mostrar error */ }
+                                    )
+                                } else {
+                                     // Permitir si no tiene biometría configurada o mostrar error.
+                                    // Para propósitos de este demo:
+                                    viewModel.toggleAlbum(albumInfo.id) 
+                                }
+                            } else {
+                                viewModel.toggleAlbum(albumInfo.id)
+                            }
+                        },
+                        lockedAlbums = lockedAlbums,
+                        onAlbumLongClick = { albumInfo ->
+                            if (albumInfo.id != "ALL_VIRTUAL_ALBUM") {
+                                val biom = (context as? FragmentActivity)?.let { BiometricPromptManager(it) }
+                                if (biom?.canAuthenticate() == true) {
+                                    biom.authenticate(
+                                        title = if (securityViewModel.isAlbumLocked(albumInfo.id)) "Desbloquear Álbum" else "Bloquear Álbum",
+                                        subtitle = "Autorización requerida",
+                                        onSuccess = { securityViewModel.toggleAlbumLock(albumInfo.id) },
+                                        onError = { /* Opcional error */ }
+                                    )
+                                } else {
+                                    securityViewModel.toggleAlbumLock(albumInfo.id)
+                                }
+                            }
+                        }
                     )
                 }
             }
@@ -190,14 +257,14 @@ fun GalleryScreen(
                         is GalleryUiModel.Separator -> {
                             val metadata by viewModel.sectionMetadata.collectAsStateWithLifecycle()
                             val isChecked = remember(selectedMediaIds, model.dateLabel) {
-                                viewModel.isGroupSelected(model.dateLabel, selectedMediaIds)
+                                viewModel.isGroupSelected(model.dateLabel, model.period, selectedMediaIds)
                             }
                             // Pass metadata to header
                             SectionHeader(
                                 label = model.dateLabel,
                                 metadata = metadata[model.dateLabel],
                                 isChecked = isChecked,
-                                onToggleCheck = { viewModel.toggleGroupSelection(model.dateLabel) }
+                                onToggleCheck = { viewModel.toggleGroupSelection(model.dateLabel, model.period) }
                             )
                         }
                         is GalleryUiModel.Media -> {
@@ -272,7 +339,8 @@ fun GalleryScreen(
 
                 HeaderLayout(
                     showFilters = showFilters,
-                    viewModel = viewModel
+                    viewModel = viewModel,
+                    securityViewModel = securityViewModel
                 )
             }
         }
@@ -291,7 +359,7 @@ fun GalleryScreen(
             if (currentItem != null) {
                 MediaViewerScreen(
                     item = currentItem,
-                    items = items,
+                    items = viewerItems,
                     initialIndex = viewerIndex,
                     viewModel = viewModel,
                     onClose = { viewModel.closeViewer() },

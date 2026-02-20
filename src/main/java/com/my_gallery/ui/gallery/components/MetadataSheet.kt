@@ -1,7 +1,11 @@
 package com.my_gallery.ui.gallery.components
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -21,6 +25,7 @@ import java.util.*
 import kotlin.math.log10
 import kotlin.math.pow
 
+@RequiresApi(Build.VERSION_CODES.Q)
 @Composable
 fun MetadataSheetContent(item: MediaItem, viewModel: GalleryViewModel) {
     val dateFormatter = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
@@ -67,9 +72,18 @@ fun MetadataSheetContent(item: MediaItem, viewModel: GalleryViewModel) {
             )
             MetadataItem(
                 icon = Icons.Default.CalendarMonth,
-                label = "Fecha de captura",
+                label = "Fecha de creación",
                 value = dateFormatter.format(Date(item.dateAdded))
             )
+            item.path?.let { path ->
+                val displayPath = path.replace("/storage/emulated/0/", "")
+                    .replace("/", " > ")
+                MetadataItem(
+                    icon = Icons.Default.Folder,
+                    label = "Ruta",
+                    value = displayPath
+                )
+            }
         }
         
         Spacer(modifier = Modifier.height(GalleryDesign.PaddingLarge))
@@ -191,7 +205,7 @@ fun MetadataItem(
             modifier = Modifier.size(GalleryDesign.IconSizeNormal)
         )
         Spacer(modifier = Modifier.width(GalleryDesign.PaddingMedium))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
@@ -201,7 +215,9 @@ fun MetadataItem(
                 text = value,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                modifier = Modifier.horizontalScroll(rememberScrollState())
             )
         }
     }

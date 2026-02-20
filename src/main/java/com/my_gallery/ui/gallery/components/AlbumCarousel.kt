@@ -1,12 +1,26 @@
 package com.my_gallery.ui.gallery.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,7 +28,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -34,7 +50,9 @@ import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 fun PremiumAlbumCarousel(
     albums: List<AlbumItem>,
     selectedAlbumId: String?,
-    onAlbumClick: (AlbumItem) -> Unit
+    lockedAlbums: Set<String> = emptySet(),
+    onAlbumClick: (AlbumItem) -> Unit,
+    onAlbumLongClick: (AlbumItem) -> Unit = {}
 ) {
     val density = LocalDensity.current
     
@@ -42,14 +60,14 @@ fun PremiumAlbumCarousel(
     // Usamos un offset menor para que no se sienta que se sale de la pantalla.
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall),
-        contentPadding = PaddingValues(horizontal = 12.dp), // Suficiente para zoom 1.05x
+        contentPadding = PaddingValues(horizontal = GalleryDesign.PaddingCarouselHorizontal), // Suficiente para zoom 1.05x
         modifier = Modifier
             .fillMaxWidth()
             .layout { measurable, constraints ->
                 // Alineación Pro: Queremos el borde del círculo a 8dp del borde de la pantalla.
                 // 1. Padding 12dp + margen interno item 3dp (74w - 68circle / 2) = 15dp.
                 // 2. Queremos 8dp. Desplazamiento = 8dp - 15dp = -7dp.
-                val offsetPx = with(density) { 7.dp.roundToPx() }
+                val offsetPx = with(density) { GalleryDesign.OffsetCarouselBase.roundToPx() }
                 val extendedWidth = constraints.maxWidth + (offsetPx * 2)
                 val placeable = measurable.measure(constraints.copy(maxWidth = extendedWidth))
                 
@@ -64,26 +82,32 @@ fun PremiumAlbumCarousel(
             AlbumCircleItem(
                 album = album,
                 isSelected = (album.id == "ALL_VIRTUAL_ALBUM" && selectedAlbumId == null) || (album.id == selectedAlbumId),
-                onClick = { onAlbumClick(album) }
+                isLocked = lockedAlbums.contains(album.id),
+                onClick = { onAlbumClick(album) },
+                onLongClick = { onAlbumLongClick(album) }
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AlbumCircleItem(
     album: AlbumItem,
     isSelected: Boolean,
-    onClick: () -> Unit
+    isLocked: Boolean = false,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
 ) {
-    val scale by animateFloatAsState(if (isSelected) 1.05f else 1f, label = "scale")
+    val scale by animateFloatAsState(if (isSelected) GalleryDesign.ScaleCarouselSelected else 1f, label = "scale")
     
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .width(74.dp) // Más compacto en X
-            .clickable(
+            .width(GalleryDesign.CarouselItemWidth) // Más compacto en X
+            .combinedClickable(
                 onClick = onClick,
+                onLongClick = onLongClick,
                 indication = null,
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             )
@@ -94,13 +118,13 @@ fun AlbumCircleItem(
     ) {
         Box(
             modifier = Modifier
-                .size(68.dp)
+                .size(GalleryDesign.CarouselImageSize)
                 .premiumBorder(
                     shape = CircleShape,
-                    width = if (isSelected) 2.dp else 1.dp,
+                    width = if (isSelected) GalleryDesign.BorderWidthBold else GalleryDesign.BorderWidthThin,
                     alpha = if (isSelected) 1f else 0.4f
                 )
-                .padding(3.dp)
+                .padding(GalleryDesign.CarouselImagePadding)
                 .clip(CircleShape)
         ) {
             AsyncImage(
@@ -110,7 +134,12 @@ fun AlbumCircleItem(
                     .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (isLocked) Modifier.blur(GalleryDesign.BlurRadius) else Modifier)
+                    .graphicsLayer {
+                        rotationZ = album.rotation
+                    }
             )
             
             if (isSelected) {
@@ -120,13 +149,29 @@ fun AlbumCircleItem(
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
                 )
             }
+            
+            if (isLocked) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Álbum bloqueado",
+                        tint = Color.White,
+                        modifier = Modifier.size(GalleryDesign.IconSizeSmall)
+                    )
+                }
+            }
         }
         
         Spacer(modifier = Modifier.height(GalleryDesign.PaddingTiny))
         Text(
             text = album.name,
             style = MaterialTheme.typography.labelSmall.copy(
-                letterSpacing = 0.4.sp
+                letterSpacing = GalleryDesign.LetterSpacingSmall
             ),
             maxLines = 1,
             textAlign = TextAlign.Center,

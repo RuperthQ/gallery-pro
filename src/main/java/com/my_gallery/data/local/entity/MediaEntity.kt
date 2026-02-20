@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 import com.my_gallery.domain.model.MediaItem
 
 @Keep
-@Entity(tableName = "media_items")
+@Entity(tableName = "media_items", indices = [androidx.room.Index(value = ["dateAdded"]), androidx.room.Index(value = ["albumId"])])
 data class MediaEntity(
     @PrimaryKey val id: String,
     val url: String,
@@ -19,7 +19,9 @@ data class MediaEntity(
     val height: Int = 0,
     val source: String = "LOCAL",
     val path: String? = null,
-    val albumId: String? = null
+    val albumId: String? = null,
+    val originalAlbumId: String? = null,
+    val rotation: Float = 0f
 ) {
     fun toDomain() = MediaItem(
         id = id,
@@ -33,7 +35,9 @@ data class MediaEntity(
         height = height,
         source = source,
         path = path,
-        albumId = albumId
+        albumId = albumId,
+        originalAlbumId = originalAlbumId,
+        rotation = rotation
     )
 
     companion object {
@@ -49,7 +53,9 @@ data class MediaEntity(
             height = domain.height,
             source = source,
             path = domain.path,
-            albumId = domain.albumId
+            albumId = domain.albumId,
+            originalAlbumId = domain.originalAlbumId,
+            rotation = domain.rotation
         )
     }
 }

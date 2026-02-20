@@ -1,7 +1,12 @@
 package com.my_gallery.ui.gallery
 
 import android.app.Activity
+import android.content.Context
 import android.content.pm.ActivityInfo
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -29,6 +34,9 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import android.view.WindowManager
+import androidx.compose.foundation.Canvas
+import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,6 +61,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.paging.compose.LazyPagingItems
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -87,6 +96,22 @@ fun MediaViewerScreen(
     val autoplayEnabled by viewModel.autoplayEnabled.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(initialPage = initialIndex) { items.itemCount }
     val thumbnailListState = rememberLazyListState()
+    
+    // --- MEJORA DE SEGURIDAD: Protección contra capturas de pantalla ---
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val isVaultItem = item.albumId == "SECURE_VAULT"
+    
+    DisposableEffect(isVaultItem) {
+        if (isVaultItem) {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        onDispose {
+            if (isVaultItem) {
+                activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+        }
+    }
 
     // BackHandler inteligente: Lock > Menu > Pantalla Completa > Cerrar
     androidx.activity.compose.BackHandler(enabled = true) {
@@ -139,6 +164,45 @@ fun MediaViewerScreen(
         }
     }
 
+    // --- MEJORA DE SEGURIDAD: Botón de Pánico (Shake to Lock) ---
+    DisposableEffect(isVaultItem) {
+        if (!isVaultItem) return@DisposableEffect onDispose {}
+        
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        
+        var lastShakeTime = 0L
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+                
+                val acceleration = kotlin.math.sqrt(x*x + y*y + z*z) - SensorManager.GRAVITY_EARTH
+                if (acceleration > 12f) { // Umbral de agitación
+                    val now = System.currentTimeMillis()
+                    if (now - lastShakeTime > 500) {
+                        lastShakeTime = now
+                        onClose() // Cerrar inmediatamente
+                        viewModel.clearDecryptedCache()
+                    }
+                }
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+        
+        sensorManager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
+        onDispose {
+            sensorManager.unregisterListener(listener)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.clearDecryptedCache()
+        }
+    }
+
     // Sincronización: Cuando el pager cambia, el carrusel de abajo centra la miniatura activa
     LaunchedEffect(pagerState.currentPage) {
         val itemSizePx = with(density) { GalleryDesign.ViewerThumbSize.toPx() }
@@ -159,7 +223,10 @@ fun MediaViewerScreen(
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            userScrollEnabled = !isLocked && globalScale <= 1f, // BLOQUEO: Si está bloqueado o hay zoom, no hay swipe
+            // BLOQUEO corregido: Si hay zoom impedimos el swipe. 
+            // Además bloqueamos el swipe hacia ATRÁS si estamos en la primera página para evitar el efecto de carga/bouncing.
+            userScrollEnabled = !isLocked && (globalScale <= 1.05f) && 
+                !(pagerState.currentPage == 0 && pagerState.currentPageOffsetFraction < 0), 
             pageSpacing = GalleryDesign.PaddingLarge
         ) { pageIndex ->
             val uiModel = items[pageIndex]
@@ -203,30 +270,66 @@ fun MediaViewerScreen(
                                     )
                                 }
                         ) {
-                            VideoPlayer(
-                                videoUrl = uiModel.item.url,
-                                videoWidth = uiModel.item.width,
-                                videoHeight = uiModel.item.height,
-                                autoplayEnabled = autoplayEnabled,
-                                isActive = pagerState.currentPage == pageIndex,
-                                isFullScreen = isFullScreen,
-                                showControls = uiVisible,
-                                onFullScreenChange = { isFullScreen = it },
-                                onControlsVisibilityChange = { if (!isLocked) uiVisible = it },
-                                onVideoOrientationDetected = { currentVideoIsHorizontal = it },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            val isActive = pagerState.currentPage == pageIndex
+                            val videoUrlToPlay by produceState<String?>(initialValue = null, key1 = uiModel.item.url, key2 = isActive) {
+                                if (isActive) {
+                                    if (uiModel.item.url.startsWith("vault://")) {
+                                        value = viewModel.decryptMediaToCache(uiModel.item)
+                                    } else {
+                                        value = uiModel.item.url
+                                    }
+                                } else {
+                                    value = null
+                                }
+                            }
+
+                            if (videoUrlToPlay == null && uiModel.item.url.startsWith("vault://") && isActive) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                }
+                            } else if (videoUrlToPlay != null) {
+                                VideoPlayer(
+                                    videoUrl = videoUrlToPlay!!,
+                                    videoWidth = uiModel.item.width,
+                                    videoHeight = uiModel.item.height,
+                                    autoplayEnabled = autoplayEnabled,
+                                    isActive = isActive,
+                                    isFullScreen = isFullScreen,
+                                    showControls = uiVisible,
+                                    onFullScreenChange = { isFullScreen = it },
+                                    onControlsVisibilityChange = { if (!isLocked) uiVisible = it },
+                                    onVideoOrientationDetected = { currentVideoIsHorizontal = it },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
                     } else {
+                        val currentItem = (uiModel as? GalleryUiModel.Media)?.item
                         ZoomableImage(
                              item = uiModel.item,
+                             rotation = currentItem?.rotation ?: 0f,
                              onScaleChange = { globalScale = it },
+                             onRotate = { viewModel.rotateMedia(uiModel.item) },
                              onTap = { 
                                  if (isLocked) showUnlockOverlay = true 
                                  else uiVisible = !uiVisible 
                              },
                              onLongPress = { if (!isLocked) showMenu = true }
                          )
+                    }
+
+                    // --- MEJORA DE SEGURIDAD: Marca de Agua Dinámica ---
+                    if (uiModel.item.albumId == "SECURE_VAULT") {
+                        DynamicWatermark(
+                            text = "CONFIDENCIAL - ${android.os.Build.MODEL}",
+                            alpha = 0.15f
+                        )
+                        
+                        // Protección Anti-Cámara (Flicker)
+                        FlickerShield()
+                        
+                        // Filtro de Privacidad (Anti-Espía)
+                        PrivacyFilter()
                     }
                 }
             } else {
@@ -348,7 +451,11 @@ fun MediaViewerScreen(
                                             model = thumbModel.item.thumbnail,
                                             contentDescription = null,
                                             contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize().alpha(if (isSelected) 1f else 0.5f)
+                                            modifier = Modifier.fillMaxSize()
+                                                .alpha(if (isSelected) 1f else 0.5f)
+                                                .graphicsLayer {
+                                                    rotationZ = thumbModel.item.rotation
+                                                }
                                         )
 
                                         if (thumbModel.item.mimeType.startsWith("video/")) {
@@ -399,6 +506,15 @@ fun MediaViewerScreen(
                     showToggle = true,
                     onClick = { 
                         viewModel.toggleAutoplay()
+                    }
+                ),
+                PremiumMenuItem(
+                    label = "Rotar",
+                    icon = Icons.Default.RotateRight,
+                    onClick = { 
+                        val currentMedia = (items[pagerState.currentPage] as? GalleryUiModel.Media)?.item
+                        currentMedia?.let { viewModel.rotateMedia(it) }
+                        showMenu = false
                     }
                 )
             )
@@ -489,7 +605,9 @@ fun MediaViewerScreen(
 @Composable
 fun ZoomableImage(
     item: MediaItem,
+    rotation: Float = 0f,
     onScaleChange: (Float) -> Unit,
+    onRotate: () -> Unit = {},
     onTap: () -> Unit,
     onLongPress: () -> Unit
 ) {
@@ -502,11 +620,32 @@ fun ZoomableImage(
         onScaleChange(scale)
     }
 
+    val isRotated = (rotation % 180f) != 0f
+    val rotationScale = remember(rotation, viewportSize, imageIntrinsicSize) {
+        if (viewportSize == IntSize.Zero || imageIntrinsicSize == Size.Zero || !isRotated) 1f
+        else {
+            val containerW = viewportSize.width.toFloat()
+            val containerH = viewportSize.height.toFloat()
+            val imgW = imageIntrinsicSize.width
+            val imgH = imageIntrinsicSize.height
+            val scaleFitOrig = min(containerW / imgW, containerH / imgH)
+            val scaleFitRotated = min(containerW / imgH, containerH / imgW)
+            scaleFitRotated / scaleFitOrig
+        }
+    }
+
     fun calculateBoundOffset(newOffset: Offset, currentScale: Float): Offset {
-        if (currentScale <= 1f || viewportSize == IntSize.Zero || imageIntrinsicSize == Size.Zero) return Offset.Zero
-        val ratio = min(viewportSize.width.toFloat() / imageIntrinsicSize.width, viewportSize.height.toFloat() / imageIntrinsicSize.height)
-        val fittedWidth = imageIntrinsicSize.width * ratio
-        val fittedHeight = imageIntrinsicSize.height * ratio
+        val totalScale = currentScale * rotationScale
+        if (totalScale <= 1f || viewportSize == IntSize.Zero || imageIntrinsicSize == Size.Zero) return Offset.Zero
+        
+        // Dimensiones ajustadas post-rotación
+        val imgW = if (isRotated) imageIntrinsicSize.height else imageIntrinsicSize.width
+        val imgH = if (isRotated) imageIntrinsicSize.width else imageIntrinsicSize.height
+        
+        val ratio = min(viewportSize.width.toFloat() / imgW, viewportSize.height.toFloat() / imgH)
+        val fittedWidth = imgW * ratio
+        val fittedHeight = imgH * ratio
+        
         val maxX = maxOf(0f, (fittedWidth * currentScale - viewportSize.width) / 2f)
         val maxY = maxOf(0f, (fittedHeight * currentScale - viewportSize.height) / 2f)
         return Offset(newOffset.x.coerceIn(-maxX, maxX), newOffset.y.coerceIn(-maxY, maxY))
@@ -537,6 +676,7 @@ fun ZoomableImage(
                 awaitEachGesture {
                     var zoom = 1f
                     var pan = Offset.Zero
+                    var rotationSum = 0f
                     var pastTouchSlop = false
                     val touchSlop = viewConfiguration.touchSlop
 
@@ -546,24 +686,35 @@ fun ZoomableImage(
                         if (!canceled) {
                             val zoomChange = event.calculateZoom()
                             val panChange = event.calculatePan()
+                            val rotationChange = event.calculateRotation()
 
                             if (!pastTouchSlop) {
                                 zoom *= zoomChange
                                 pan += panChange
+                                rotationSum += rotationChange
                                 val centroidSize = event.calculateCentroidSize(useCurrent = false)
                                 val zoomMotion = kotlin.math.abs(1 - zoom) * centroidSize
                                 val panMotion = pan.getDistance()
+                                val rotationMotion = kotlin.math.abs(rotationSum)
 
-                                if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                                if (zoomMotion > touchSlop || panMotion > touchSlop || rotationMotion > 10f) {
                                     pastTouchSlop = true
                                 }
                             }
 
                             if (pastTouchSlop) {
+                                // GESTO DE ROTACIÓN DIRECTO:
+                                // Si detectamos una rotación significativa (> 35 grados en el gesto actual), 
+                                // disparamos la rotación persistente.
+                                if (kotlin.math.abs(rotationSum) > 35f) {
+                                    onRotate() 
+                                    rotationSum = 0f 
+                                }
+
                                 // Solo consumimos si estamos haciendo zoom o si ya estamos ampliados
                                 if (scale > 1.01f || zoomChange > 1.01f) {
                                     val newScale = (scale * zoomChange).coerceIn(1f, GalleryDesign.ViewerScaleLimit)
-                                    val candidateOffset = offset + panChange * scale
+                                    val candidateOffset = offset + panChange
                                     
                                     scale = newScale
                                     offset = calculateBoundOffset(candidateOffset, scale)
@@ -587,15 +738,18 @@ fun ZoomableImage(
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(item.url)
+                .setParameter("is_full_res", true)
                 .crossfade(GalleryDesign.ViewerAnimNormal)
                 .build(),
             contentDescription = null,
             onState = { if (it is coil.compose.AsyncImagePainter.State.Success) imageIntrinsicSize = it.painter?.intrinsicSize ?: Size.Zero },
             modifier = Modifier.fillMaxSize().graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                val finalScale = scale * rotationScale
+                scaleX = finalScale
+                scaleY = finalScale
                 translationX = offset.x
                 translationY = offset.y
+                rotationZ = rotation
             },
             contentScale = ContentScale.Fit
         )
@@ -679,5 +833,81 @@ fun Modifier.rotatingPremiumBorder(
                 cap = StrokeCap.Round
             )
         )
+    }
+}
+@Composable
+fun DynamicWatermark(
+    text: String,
+    alpha: Float = 0.12f
+) {
+    // Usamos el color onSurface pero con transparencia
+    val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    
+    // Convertimos dp a px para el motor nativo de Canvas
+    val textSizePx = with(density) { 24.sp.toPx() }
+    val stepXPx = with(density) { 250.dp.toPx() }
+    val stepYPx = with(density) { 180.dp.toPx() }
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val paint = android.graphics.Paint().apply {
+            this.textSize = textSizePx
+            this.color = android.graphics.Color.WHITE
+            this.alpha = (alpha * 255).toInt()
+            this.textAlign = android.graphics.Paint.Align.CENTER
+            this.isAntiAlias = true
+            this.typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+            // Sombra para que se vea en fondos blancos
+            this.setShadowLayer(5f, 0f, 0f, android.graphics.Color.BLACK)
+        }
+
+        rotate(-35f) {
+            // Ampliamos el rango para cubrir toda la pantalla rotada
+            for (x in -500..size.width.toInt() + 1000 step stepXPx.toInt()) {
+                for (y in -500..size.height.toInt() + 1000 step stepYPx.toInt()) {
+                    drawContext.canvas.nativeCanvas.drawText(
+                        text,
+                        x.toFloat(),
+                        y.toFloat(),
+                        paint
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FlickerShield() {
+    val infiniteTransition = rememberInfiniteTransition(label = "flicker")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 0.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(16, easing = LinearEasing), // ~60Hz flicker
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = alpha))
+    )
+}
+
+@Composable
+fun PrivacyFilter() {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val step = 4.dp.toPx()
+        for (x in 0..size.width.toInt() step step.toInt()) {
+            drawLine(
+                color = Color.Black.copy(alpha = 0.05f),
+                start = Offset(x.toFloat(), 0f),
+                end = Offset(x.toFloat(), size.height),
+                strokeWidth = 1.dp.toPx()
+            )
+        }
     }
 }

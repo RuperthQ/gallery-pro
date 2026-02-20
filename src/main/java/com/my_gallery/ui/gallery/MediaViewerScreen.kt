@@ -643,7 +643,7 @@ fun ZoomableImage(
                                 // Solo consumimos si estamos haciendo zoom o si ya estamos ampliados
                                 if (scale > 1.01f || zoomChange > 1.01f) {
                                     val newScale = (scale * zoomChange).coerceIn(1f, GalleryDesign.ViewerScaleLimit)
-                                    val candidateOffset = offset + panChange * scale
+                                    val candidateOffset = offset + panChange
                                     
                                     scale = newScale
                                     offset = calculateBoundOffset(candidateOffset, scale)

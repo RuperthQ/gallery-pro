@@ -98,7 +98,7 @@ object GalleryDesign {
     
     val ViewerHeaderSafetyPadding = 56.dp
     val ViewerTitlePaddingH = 16.dp
-    val ViewerTitlePaddingV = 8.dp
+    val ViewerTitlePaddingV = 12.dp
     
     val ViewerCarouselHeight = 82.dp
     val ViewerThumbSize = 72.dp

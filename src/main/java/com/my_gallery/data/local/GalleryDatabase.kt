@@ -7,7 +7,7 @@ import com.my_gallery.data.local.entity.MediaEntity
 
 @Database(
     entities = [MediaEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class GalleryDatabase : RoomDatabase() {

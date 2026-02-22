@@ -33,6 +33,8 @@ data class MediaItem(
     val albumId: String? = null,
     @SerializedName("originalAlbumId")
     val originalAlbumId: String? = null,
+    @SerializedName("relativePath")
+    val relativePath: String? = null,
     @SerializedName("rotation")
     val rotation: Float = 0f
 )

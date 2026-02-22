@@ -50,6 +50,7 @@ import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 fun PremiumAlbumCarousel(
     albums: List<AlbumItem>,
     selectedAlbumId: String?,
+    modifier: Modifier = Modifier,
     lockedAlbums: Set<String> = emptySet(),
     onAlbumClick: (AlbumItem) -> Unit,
     onAlbumLongClick: (AlbumItem) -> Unit = {}
@@ -61,7 +62,7 @@ fun PremiumAlbumCarousel(
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall),
         contentPadding = PaddingValues(horizontal = GalleryDesign.PaddingCarouselHorizontal), // Suficiente para zoom 1.05x
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .layout { measurable, constraints ->
                 // Alineación Pro: Queremos el borde del círculo a 8dp del borde de la pantalla.

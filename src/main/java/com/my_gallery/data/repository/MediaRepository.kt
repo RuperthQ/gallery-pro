@@ -153,8 +153,9 @@ class MediaRepository @Inject constructor(
                             MediaStore.MediaColumns.WIDTH,
                             MediaStore.MediaColumns.HEIGHT,
                             MediaStore.MediaColumns.DATA,
-                            MediaStore.MediaColumns.BUCKET_ID
-                        ), 
+                            MediaStore.MediaColumns.BUCKET_ID,
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.MediaColumns.RELATIVE_PATH else MediaStore.MediaColumns.DATA
+                        ).filterNotNull().toTypedArray(), 
                         null, null,
                         "${MediaStore.MediaColumns.DATE_ADDED} DESC"
                     )
@@ -192,7 +193,19 @@ class MediaRepository @Inject constructor(
                                 height = it.getInt(heightCol),
                                 source = "LOCAL",
                                 path = absolutePath,
-                                albumId = bucketId
+                                albumId = bucketId,
+                                relativePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    it.getString(it.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH))
+                                } else {
+                                    // Fallback para versiones antiguas: extraer de DATA
+                                    try {
+                                        val file = java.io.File(absolutePath)
+                                        val parent = file.parent ?: ""
+                                        if (parent.contains("/0/")) {
+                                            parent.substringAfter("/0/").ensureTrailingSlash()
+                                        } else parent.ensureTrailingSlash()
+                                    } catch (e: Exception) { null }
+                                }
                             ))
                         }
                     }
@@ -413,9 +426,14 @@ class MediaRepository @Inject constructor(
         }
     }
 
-    suspend fun moveMediaToAlbum(items: List<MediaItem>, albumName: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun moveMediaToAlbum(items: List<MediaItem>, albumName: String, targetAlbumId: String? = null): Boolean = withContext(Dispatchers.IO) {
         try {
-            val targetDir = createAlbum(albumName) ?: return@withContext false
+            val targetDir = if (targetAlbumId != null) {
+                getAlbumPathById(targetAlbumId) ?: createAlbum(albumName)
+            } else {
+                createAlbum(albumName)
+            } ?: return@withContext false
+            
             var allSuccess = true
 
             items.forEach { item ->
@@ -426,7 +444,8 @@ class MediaRepository @Inject constructor(
                         fileName = if (item.title.startsWith("Recuperado_")) "${item.id}.${if(item.mimeType.contains("video")) "mp4" else "jpg"}" else item.title,
                         mimeType = item.mimeType,
                         originalAlbumId = item.originalAlbumId,
-                        targetAlbumName = albumName
+                        targetAlbumName = albumName,
+                        originalDate = item.dateAdded
                     )
                     if (restoredUri != null) {
                         mediaDao.deleteById(item.id)
@@ -539,8 +558,9 @@ class MediaRepository @Inject constructor(
 
     @RequiresApi(Build.VERSION_CODES.Q)
     suspend fun secureMediaItems(items: List<MediaItem>): DeleteResult = withContext(Dispatchers.IO) {
-        try {
-            val successfullySecured = mutableListOf<MediaItem>()
+        syncMutex.withLock {
+            try {
+                val successfullySecured = mutableListOf<MediaItem>()
             
             for (item in items) {
                 // 1. Encriptar y guardar en Bóveda Privada
@@ -554,7 +574,8 @@ class MediaRepository @Inject constructor(
                         newPath = vaultFile.absolutePath,
                         newAlbumId = "SECURE_VAULT",
                         newUrl = "vault://${item.id}",
-                        oldAlbumId = item.albumId
+                        oldAlbumId = item.albumId,
+                        relativePath = item.relativePath
                     )
                 }
             }
@@ -566,19 +587,28 @@ class MediaRepository @Inject constructor(
             // 3. Eliminar los archivos públicos originales de MediaStore (sin eliminarlos de Room, porque ahora son SECURE_VAULT)
             return@withContext deleteMedia(successfullySecured, removeFromRoom = false)
             
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return@withContext DeleteResult.Error(e.message ?: "Error al encriptar medios")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                return@withLock DeleteResult.Error(e.message ?: "Error al encriptar medios")
+            }
         }
     }
 
     suspend fun unsecureMediaItems(items: List<MediaItem>): DeleteResult = withContext(Dispatchers.IO) {
-        try {
-            var restoredCount = 0
+        syncMutex.withLock {
+            try {
+                var restoredCount = 0
             
             for (item in items) {
                 if (item.albumId == "SECURE_VAULT") {
-                    val restoredUri = vaultRepository.restoreMedia(item.id, item.title, item.mimeType, item.originalAlbumId)
+                    val restoredUri = vaultRepository.restoreMedia(
+                        mediaId = item.id, 
+                        fileName = item.title, 
+                        mimeType = item.mimeType, 
+                        originalAlbumId = item.originalAlbumId,
+                        targetRelativePath = item.relativePath,
+                        originalDate = item.dateAdded
+                    )
                     if (restoredUri != null) {
                         restoredCount++
                         // Para simplificar, lo borramos de Room y un resync(o carga lazy) lo actualizará en la UI.
@@ -591,10 +621,11 @@ class MediaRepository @Inject constructor(
                 return@withContext DeleteResult.Error("No se pudo restaurar ningún archivo.")
             }
             
-            return@withContext DeleteResult.Success(restoredCount)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return@withContext DeleteResult.Error(e.message ?: "Error al restaurar medios")
+                return@withLock DeleteResult.Success(restoredCount)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                return@withLock DeleteResult.Error(e.message ?: "Error al restaurar medios")
+            }
         }
     }
 
@@ -648,6 +679,30 @@ class MediaRepository @Inject constructor(
         }
     }
 
+    private fun getAlbumPathById(albumId: String): java.io.File? {
+        val projection = arrayOf(MediaStore.MediaColumns.DATA)
+        val selection = "${MediaStore.MediaColumns.BUCKET_ID} = ?"
+        val selectionArgs = arrayOf(albumId)
+        
+        val uris = listOf(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        )
+
+        uris.forEach { uri ->
+            context.contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val path = cursor.getString(0)
+                    if (path != null) {
+                        val file = java.io.File(path)
+                        return file.parentFile
+                    }
+                }
+            }
+        }
+        return null
+    }
+
     suspend fun decryptMediaToCache(mediaId: String, mimeType: String): java.io.File? {
         val ext = if (mimeType.contains("/")) mimeType.substringAfterLast("/") else "mp4"
         return vaultRepository.decryptMediaToCache(mediaId, ext)
@@ -672,4 +727,8 @@ sealed class DeleteResult {
     data class Success(val count: Int) : DeleteResult()
     data class Error(val message: String) : DeleteResult()
     data class PermissionRequired(val intentSender: android.content.IntentSender) : DeleteResult()
+}
+
+private fun String.ensureTrailingSlash(): String {
+    return if (this.endsWith("/")) this else "$this/"
 }

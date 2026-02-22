@@ -14,15 +14,17 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.IntSize
 import com.my_gallery.ui.theme.GalleryDesign
 
-@Composable
-fun Modifier.shimmerEffect(): Modifier {
+import androidx.compose.ui.composed
+
+fun Modifier.shimmerEffect(): Modifier = composed {
     val transition = rememberInfiniteTransition(label = "shimmer")
     
     val translateAnim = transition.animateFloat(
         initialValue = GalleryDesign.ShimmerXStart,
         targetValue = GalleryDesign.ShimmerXEnd,
         animationSpec = infiniteRepeatable(
-            animation = tween(GalleryDesign.ShimmerAnimDuration, easing = LinearEasing)
+            animation = tween(GalleryDesign.ShimmerAnimDuration, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
         label = "shimmerX"
     )
@@ -34,7 +36,7 @@ fun Modifier.shimmerEffect(): Modifier {
         colorBase.copy(alpha = GalleryDesign.AlphaDisable),
     )
 
-    return this.background(
+    Modifier.background(
         brush = Brush.linearGradient(
             colors = shimmerColors,
             start = Offset(translateAnim.value, 0f),

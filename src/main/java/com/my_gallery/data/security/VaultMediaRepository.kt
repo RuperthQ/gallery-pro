@@ -197,7 +197,9 @@ class VaultMediaRepository @Inject constructor(
         fileName: String, 
         mimeType: String, 
         originalAlbumId: String? = null,
-        targetAlbumName: String? = null
+        targetAlbumName: String? = null,
+        targetRelativePath: String? = null,
+        originalDate: Long? = null
     ): Uri? = withContext(Dispatchers.IO) {
         val secureFile = File(vaultDir, "$mediaId.enc")
         if (!secureFile.exists()) return@withContext null
@@ -212,15 +214,37 @@ class VaultMediaRepository @Inject constructor(
         }
 
         // Determinar ruta relativa
-        val baseDir = if (isVideo) android.os.Environment.DIRECTORY_DCIM else android.os.Environment.DIRECTORY_PICTURES
-        val folder = targetAlbumName ?: "Gallery_Pro"
-        val relativePath = "$baseDir/$folder"
+        val finalRelativePath = when {
+            !targetRelativePath.isNullOrBlank() -> targetRelativePath
+            !targetAlbumName.isNullOrBlank() -> {
+                val baseDir = if (isVideo) android.os.Environment.DIRECTORY_DCIM else android.os.Environment.DIRECTORY_PICTURES
+                "$baseDir/$targetAlbumName"
+            }
+            else -> {
+                val baseDir = if (isVideo) android.os.Environment.DIRECTORY_DCIM else android.os.Environment.DIRECTORY_PICTURES
+                "$baseDir/Gallery_Pro"
+            }
+        }
 
         val values = android.content.ContentValues().apply {
             put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            
+            originalDate?.let { dateMs ->
+                // MediaStore suele usar SEGUNDOS para DATE_ADDED y MILISEGUNDOS para DATE_TAKEN
+                val dateSec = dateMs / 1000L
+                put(android.provider.MediaStore.MediaColumns.DATE_ADDED, dateSec)
+                put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED, dateSec)
+                
+                if (isVideo) {
+                    put(android.provider.MediaStore.Video.VideoColumns.DATE_TAKEN, dateMs)
+                } else {
+                    put(android.provider.MediaStore.Images.ImageColumns.DATE_TAKEN, dateMs)
+                }
+            }
+
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, finalRelativePath)
                 put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
             }
         }

@@ -318,17 +318,9 @@ fun MediaViewerScreen(
                          )
                     }
 
-                    // --- MEJORA DE SEGURIDAD: Marca de Agua Dinámica ---
+                    // Protección Anti-Cámara (Flicker) y Filtro Anti-Espía
                     if (uiModel.item.albumId == "SECURE_VAULT") {
-                        DynamicWatermark(
-                            text = "CONFIDENCIAL - ${android.os.Build.MODEL}",
-                            alpha = 0.15f
-                        )
-                        
-                        // Protección Anti-Cámara (Flicker)
                         FlickerShield()
-                        
-                        // Filtro de Privacidad (Anti-Espía)
                         PrivacyFilter()
                     }
                 }
@@ -833,47 +825,6 @@ fun Modifier.rotatingPremiumBorder(
                 cap = StrokeCap.Round
             )
         )
-    }
-}
-@Composable
-fun DynamicWatermark(
-    text: String,
-    alpha: Float = 0.12f
-) {
-    // Usamos el color onSurface pero con transparencia
-    val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    
-    // Convertimos dp a px para el motor nativo de Canvas
-    val textSizePx = with(density) { 24.sp.toPx() }
-    val stepXPx = with(density) { 250.dp.toPx() }
-    val stepYPx = with(density) { 180.dp.toPx() }
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val paint = android.graphics.Paint().apply {
-            this.textSize = textSizePx
-            this.color = android.graphics.Color.WHITE
-            this.alpha = (alpha * 255).toInt()
-            this.textAlign = android.graphics.Paint.Align.CENTER
-            this.isAntiAlias = true
-            this.typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
-            // Sombra para que se vea en fondos blancos
-            this.setShadowLayer(5f, 0f, 0f, android.graphics.Color.BLACK)
-        }
-
-        rotate(-35f) {
-            // Ampliamos el rango para cubrir toda la pantalla rotada
-            for (x in -500..size.width.toInt() + 1000 step stepXPx.toInt()) {
-                for (y in -500..size.height.toInt() + 1000 step stepYPx.toInt()) {
-                    drawContext.canvas.nativeCanvas.drawText(
-                        text,
-                        x.toFloat(),
-                        y.toFloat(),
-                        paint
-                    )
-                }
-            }
-        }
     }
 }
 

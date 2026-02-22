@@ -27,7 +27,7 @@ fun PremiumAlertDialog(
             Text(
                 text = title,
                 fontWeight = FontWeight.Bold,
-                color = titleColor
+                color = titleColor,
             )
         },
         text = text,

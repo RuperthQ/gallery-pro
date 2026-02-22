@@ -16,10 +16,15 @@ import androidx.annotation.RequiresApi
 import com.my_gallery.data.repository.MediaRepository
 import com.my_gallery.data.repository.RenameResult
 import com.my_gallery.data.repository.SecurityRepository
+import com.my_gallery.data.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import com.my_gallery.domain.model.AlbumItem
 import com.my_gallery.data.local.dao.SectionMetadataRow
+import com.my_gallery.ui.theme.AppThemeColor
+
+enum class MenuStyle { TOP_HEADER, BOTTOM_FLOATING }
+enum class AlbumBehavior { FIXED_IN_GRID, FLOATING_TOP, STATIC_TOP }
 
 enum class GallerySource { LOCAL }
 
@@ -27,7 +32,8 @@ enum class GallerySource { LOCAL }
 class GalleryViewModel @Inject constructor(
     private val application: Application,
     private val repository: MediaRepository,
-    private val securityRepository: SecurityRepository
+    private val securityRepository: SecurityRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _albums = MutableStateFlow<List<AlbumItem>>(emptyList())
@@ -37,6 +43,7 @@ class GalleryViewModel @Inject constructor(
     val selectedAlbum: StateFlow<String?> = _selectedAlbum.asStateFlow()
 
     fun toggleAlbum(albumId: String?) {
+        groupIdsCache.clear()
         if (albumId == "ALL_VIRTUAL_ALBUM") {
             _selectedAlbum.value = null
         } else {
@@ -44,8 +51,19 @@ class GalleryViewModel @Inject constructor(
         }
     }
 
-    private val _columnCount = MutableStateFlow(4)
-    val columnCount: StateFlow<Int> = _columnCount.asStateFlow()
+    val columnCount: StateFlow<Int> = settingsRepository.columnCount
+
+    val albumBehavior: StateFlow<AlbumBehavior> = settingsRepository.albumBehavior
+
+    fun setAlbumBehavior(behavior: AlbumBehavior) {
+        settingsRepository.setAlbumBehavior(behavior)
+    }
+
+    val themeColor: StateFlow<AppThemeColor> = settingsRepository.themeColor
+
+    fun setThemeColor(color: AppThemeColor) {
+        settingsRepository.setThemeColor(color)
+    }
 
     private val _selectedFilter = MutableStateFlow<String?>(null)
     val selectedFilter: StateFlow<String?> = _selectedFilter.asStateFlow()
@@ -59,11 +77,28 @@ class GalleryViewModel @Inject constructor(
     private val _showFilters = MutableStateFlow(false)
     val showFilters: StateFlow<Boolean> = _showFilters.asStateFlow()
 
-    private val _showEmptyAlbums = MutableStateFlow(false)
-    val showEmptyAlbums: StateFlow<Boolean> = _showEmptyAlbums.asStateFlow()
+    fun toggleAppLock(locked: Boolean) {
+        securityRepository.setAppLocked(locked)
+    }
+
+    val isAppLocked = securityRepository.isAppLocked
+
+    private val _showSettings = MutableStateFlow(false)
+    val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
+
+    fun showSettings() { _showSettings.value = true }
+    fun hideSettings() { _showSettings.value = false }
+
+    val menuStyle: StateFlow<MenuStyle> = settingsRepository.menuStyle
+
+    fun setMenuStyle(style: MenuStyle) {
+        settingsRepository.setMenuStyle(style)
+    }
+
+    val showEmptyAlbums: StateFlow<Boolean> = settingsRepository.showEmptyAlbums
 
     fun toggleShowEmptyAlbums() {
-        _showEmptyAlbums.value = !_showEmptyAlbums.value
+        settingsRepository.setShowEmptyAlbums(!showEmptyAlbums.value)
         syncGallery()
     }
 
@@ -89,6 +124,9 @@ class GalleryViewModel @Inject constructor(
 
     private val _selectedMediaIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedMediaIds: StateFlow<Set<String>> = _selectedMediaIds.asStateFlow()
+
+    // Cache para IDs de grupos/secciones (para optimizar isGroupSelected)
+    private val groupIdsCache = mutableMapOf<String, List<String>>()
 
     private val _showCreateAlbumDialog = MutableStateFlow(false)
     val showCreateAlbumDialog: StateFlow<Boolean> = _showCreateAlbumDialog.asStateFlow()
@@ -125,6 +163,7 @@ class GalleryViewModel @Inject constructor(
     }
 
     private var targetAlbumName: String? = null
+    private var targetAlbumId: String? = null
 
     fun toggleSelectionMode() {
         _isSelectionMode.value = !_isSelectionMode.value
@@ -132,6 +171,7 @@ class GalleryViewModel @Inject constructor(
             _selectedMediaIds.value = emptySet()
             _isAlbumCreationPending.value = false
             targetAlbumName = null
+            targetAlbumId = null
         }
     }
 
@@ -163,26 +203,34 @@ class GalleryViewModel @Inject constructor(
     val isAlbumCreationPending: StateFlow<Boolean> = _isAlbumCreationPending.asStateFlow()
 
     fun startAlbumCreation(name: String) {
+        val currentSelection = _selectedMediaIds.value
         targetAlbumName = name
         _showCreateAlbumDialog.value = false
-        _isSelectionMode.value = true
-        _isAlbumCreationPending.value = true
-        _selectedMediaIds.value = emptySet()
 
-        // Insertar álbum temporalmente en el carrusel después del primer elemento (Todo)
-        val currentAlbums = _albums.value.toMutableList()
-        val tempAlbum = AlbumItem(
-            id = "TEMP_ALBUM_${System.currentTimeMillis()}",
-            name = name,
-            thumbnail = "", // Sin miniatura hasta que se mueva algo
-            count = 0
-        )
-        if (currentAlbums.size > 1) {
-            currentAlbums.add(1, tempAlbum)
+        if (currentSelection.isNotEmpty()) {
+            // Proceder directamente a mover los elementos seleccionados
+            saveSelectedToNewAlbum()
         } else {
-            currentAlbums.add(tempAlbum)
+            // Flujo normal: iniciar selección para el nuevo álbum
+            _isSelectionMode.value = true
+            _isAlbumCreationPending.value = true
+            _selectedMediaIds.value = emptySet()
+
+            // Insertar álbum temporalmente en el carrusel después del primer elemento (Todo)
+            val currentAlbums = _albums.value.toMutableList()
+            val tempAlbum = AlbumItem(
+                id = "TEMP_ALBUM_${System.currentTimeMillis()}",
+                name = name,
+                thumbnail = "", 
+                count = 0
+            )
+            if (currentAlbums.size > 1) {
+                currentAlbums.add(1, tempAlbum)
+            } else {
+                currentAlbums.add(tempAlbum)
+            }
+            _albums.value = currentAlbums
         }
-        _albums.value = currentAlbums
     }
 
     fun saveSelectedToNewAlbum() {
@@ -204,11 +252,12 @@ class GalleryViewModel @Inject constructor(
                 // Necesitamos los objetos MediaItem reales. 
                 val toMove = repository.getMediaByIds(selectedIds.toList())
                 
-                val success = repository.moveMediaToAlbum(toMove, albumName)
+                val success = repository.moveMediaToAlbum(toMove, albumName, targetAlbumId)
                 if (success) {
                     // Refrescar inmediatamente
                     _selectedMediaIds.value = emptySet()
                     targetAlbumName = null
+                    targetAlbumId = null
                     _isSelectionMode.value = false
                     
                     // Pequeña espera para asegurar que MediaStore se actualice
@@ -221,9 +270,10 @@ class GalleryViewModel @Inject constructor(
         }
     }
 
-    fun moveSelectedToExistingAlbum(albumName: String) {
+    fun moveSelectedToExistingAlbum(album: AlbumItem) {
         _showMoveToAlbumDialog.value = false
-        targetAlbumName = albumName
+        targetAlbumName = album.name
+        targetAlbumId = album.id
         saveSelectedToNewAlbum()
     }
 
@@ -232,6 +282,7 @@ class GalleryViewModel @Inject constructor(
         _isAlbumCreationPending.value = false
         _selectedMediaIds.value = emptySet()
         targetAlbumName = null
+        targetAlbumId = null
     }
 
     // --------------------------------
@@ -289,7 +340,7 @@ class GalleryViewModel @Inject constructor(
     private fun loadAlbums() {
         viewModelScope.launch {
             combine(
-                repository.getLocalAlbums(_showEmptyAlbums.value),
+                repository.getLocalAlbums(showEmptyAlbums.value),
                 securityRepository.isDecoyMode,
                 securityRepository.lockedAlbums
             ) { list, isDecoy, locked ->
@@ -323,11 +374,6 @@ class GalleryViewModel @Inject constructor(
             }.collect()
         }
     }
-
-    val availableFilters = flow {
-        val filters = listOf("Todos", "Enero 2026", "Diciembre 2025", "Noviembre 2025", "Octubre 2025")
-        emit(filters)
-    }.stateIn(viewModelScope, SharingStarted.Lazily, listOf("Todos"))
 
     val availableImageExtensions: StateFlow<List<String>> = repository.getDistinctMimeTypes("LOCAL")
         .map { mimes ->
@@ -392,6 +438,10 @@ class GalleryViewModel @Inject constructor(
                 }
             }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
+    val availableFilters: StateFlow<List<String>> = sectionMetadata.map { metadata ->
+        listOf("Todos") + metadata.keys.map { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase(Locale.ROOT) else char.toString() } }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, listOf("Todos"))
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val pagedItems: Flow<PagingData<GalleryUiModel>> = combine(
@@ -512,20 +562,22 @@ class GalleryViewModel @Inject constructor(
     }.cachedIn(viewModelScope)
 
     private fun formatDate(timestamp: Long): String {
-        return dateFormatter.format(Date(timestamp))
+        return dateFormatter.format(Date(timestamp)).replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase(Locale.ROOT) else char.toString() }
     }
 
     fun changeColumns() {
-        _columnCount.value = when (_columnCount.value) {
+        val next = when (columnCount.value) {
             3 -> 4
             4 -> 5
             5 -> 6
             6 -> 3
             else -> 4
         }
+        settingsRepository.setColumnCount(next)
     }
 
     fun onFilterSelected(filter: String) {
+        groupIdsCache.clear()
         _selectedFilter.value = if (filter == "Todos") null else filter
     }
 
@@ -535,6 +587,7 @@ class GalleryViewModel @Inject constructor(
     }
 
     fun onVideoFilterSelected(res: String) {
+        groupIdsCache.clear()
         _selectedImageFilter.value = null
         _selectedVideoFilter.value = if (res == "Todas") null else res
     }
@@ -603,6 +656,7 @@ class GalleryViewModel @Inject constructor(
     }
 
     fun syncGallery() {
+        groupIdsCache.clear()
         viewModelScope.launch {
             repository.syncLocalGallery()
             delay(500) // Small delay to let MediaStore update
@@ -843,6 +897,8 @@ class GalleryViewModel @Inject constructor(
                 else -> "%"
             }
             val ids = repository.getMediaIdsByPeriod("LOCAL", period, mimeFilter, _selectedAlbum.value)
+            groupIdsCache[period] = ids // Guardamos en cache para isGroupSelected
+            
             val current = _selectedMediaIds.value.toMutableSet()
             
             // Si ya están todos seleccionados, quitamos. Si no, añadimos todos.
@@ -860,18 +916,17 @@ class GalleryViewModel @Inject constructor(
     }
 
     fun isGroupSelected(label: String, period: String, selectedIds: Set<String>): Boolean {
-        // Esta función sigue siendo llamada en cada recomposición.
-        // Para evitar lentitud, la lógica de "todos seleccionados" debería basarse en el conteo de la metadata.
-        val meta = sectionMetadata.value[label] ?: return false
-        // Contamos cuántos IDs seleccionados tenemos. 
-        // Nota: Seguiría siendo lento si el set es gigante.
-        // Lo ideal es que el Header maneje su propio estado de 'marcado' basado en eventos.
-        return false 
+        // Obtenemos los IDs del cache. Si no están, no podemos asegurar que esté seleccionado.
+        val ids = groupIdsCache[period] ?: return false
+        if (ids.isEmpty()) return false
+        
+        // Verificamos si todos los IDs de este grupo están en el set de seleccionados
+        return ids.all { it in selectedIds }
     }
 
     fun areAllSelectedSecured(): Boolean {
-        // Todo: Implementar via repository si es crítico
-        return false
+        if (_selectedMediaIds.value.isEmpty()) return false
+        return _selectedAlbum.value == "SECURE_VAULT"
     }
 
     suspend fun decryptMediaToCache(item: MediaItem): String? {

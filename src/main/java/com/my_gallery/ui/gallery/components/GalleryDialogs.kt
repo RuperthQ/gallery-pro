@@ -18,19 +18,22 @@ import com.my_gallery.ui.components.PremiumLoadingOverlay
 import com.my_gallery.ui.gallery.GalleryViewModel
 import com.my_gallery.ui.theme.GalleryDesign
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 @Composable
 fun CreateAlbumDialog(
     viewModel: GalleryViewModel,
     onDismiss: () -> Unit
 ) {
     var albumName by remember { mutableStateOf("") }
+    val selectedIds by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
     
     PremiumAlertDialog(
         onDismissRequest = onDismiss,
-        title = "Nuevo Álbum Premium",
+        title = "Nuevo Álbum",
         text = {
             Column {
-                Text("Ingresa el nombre del álbum que se creará en DCIM/Gallery_Pro", style = MaterialTheme.typography.bodySmall)
+                Text("El álbum se creará en DCIM/Gallery_Pro", style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(GalleryDesign.PaddingSmall))
                 OutlinedTextField(
                     value = albumName,
@@ -47,7 +50,7 @@ fun CreateAlbumDialog(
                 onClick = { if (albumName.isNotBlank()) viewModel.startAlbumCreation(albumName) },
                 shape = GalleryDesign.CardShape
             ) {
-                Text("Crear y Seleccionar")
+                Text(if (selectedIds.isNotEmpty()) "Crear y Mover" else "Crear y Seleccionar")
             }
         },
         dismissButton = {
@@ -106,7 +109,7 @@ fun MoveToAlbumDialog(
                                     .fillMaxWidth()
                                     .clip(GalleryDesign.CardShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                                    .clickable { viewModel.moveSelectedToExistingAlbum(album.name) }
+                                    .clickable { viewModel.moveSelectedToExistingAlbum(album) }
                                     .padding(GalleryDesign.PaddingMedium),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {

@@ -11,7 +11,8 @@ class HeaderActionsOrchestrator(
             ChangeGridAction(viewModel)(),
             ToggleFilterAction(viewModel, showFilters)(),
             ToggleEmptyAlbumsAction(viewModel, showEmptyAlbums)(),
-            ToggleSelectionAction(viewModel)()
+            ToggleSelectionAction(viewModel)(),
+            SettingsAction(viewModel)()
         )
     }
 

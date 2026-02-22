@@ -32,6 +32,7 @@ import com.my_gallery.ui.gallery.filters.FilterOrchestrator
 import com.my_gallery.ui.gallery.filters.GalleryFilter
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
+import com.my_gallery.ui.theme.GalleryDesign.glassBackground
 
 import com.my_gallery.ui.security.SecurityViewModel
 import com.my_gallery.ui.security.BiometricPromptManager

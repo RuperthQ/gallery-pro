@@ -119,8 +119,8 @@ interface MediaDao {
     @Query("UPDATE media_items SET path = :newPath, albumId = :newAlbumId WHERE id = :id")
     suspend fun updatePathAndAlbum(id: String, newPath: String, newAlbumId: String)
 
-    @Query("UPDATE media_items SET path = :newPath, albumId = :newAlbumId, url = :newUrl, thumbnail = :newUrl, originalAlbumId = :oldAlbumId WHERE id = :id")
-    suspend fun updatePathAlbumAndUrl(id: String, newPath: String, newAlbumId: String, newUrl: String, oldAlbumId: String?)
+    @Query("UPDATE media_items SET path = :newPath, albumId = :newAlbumId, url = :newUrl, thumbnail = :newUrl, originalAlbumId = :oldAlbumId, relativePath = :relativePath WHERE id = :id")
+    suspend fun updatePathAlbumAndUrl(id: String, newPath: String, newAlbumId: String, newUrl: String, oldAlbumId: String?, relativePath: String?)
 
     @Query("DELETE FROM media_items WHERE source = :source AND albumId != 'SECURE_VAULT'")
     suspend fun clearBySource(source: String)
@@ -159,6 +159,7 @@ interface MediaDao {
         )
         AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
         GROUP BY period
+        ORDER BY MAX(dateAdded) DESC
     """)
     fun getAllSectionsMetadata(
         source: String, 

@@ -6,23 +6,25 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -35,6 +37,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -48,8 +51,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
@@ -57,23 +62,18 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.my_gallery.domain.model.MediaItem
-import com.my_gallery.ui.gallery.components.CreateAlbumDialog
-import com.my_gallery.ui.gallery.components.DeleteConfirmationDialog
-import com.my_gallery.ui.gallery.components.GalleryItem
-import com.my_gallery.ui.gallery.components.GalleryPlaceholder
-import com.my_gallery.ui.gallery.components.HeaderLayout
-import com.my_gallery.ui.gallery.components.LoadingOverlay
-import com.my_gallery.ui.gallery.components.MetadataSheetContent
-import com.my_gallery.ui.gallery.components.MoveToAlbumDialog
+import com.my_gallery.ui.gallery.components.*
+import com.my_gallery.ui.gallery.MenuStyle
+import com.my_gallery.ui.gallery.AlbumBehavior
 import com.my_gallery.ui.security.BiometricPromptManager
-import androidx.fragment.app.FragmentActivity
 import com.my_gallery.ui.security.SecurityViewModel
-import com.my_gallery.ui.gallery.components.PermissionBanner
-import com.my_gallery.ui.gallery.components.PremiumAlbumCarousel
-import com.my_gallery.ui.gallery.components.SectionHeader
+import androidx.fragment.app.FragmentActivity
+import com.my_gallery.ui.settings.SettingsScreen
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.glassBackground
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
+import com.my_gallery.ui.theme.GalleryDesign.bottomPremiumBorder
+import com.my_gallery.ui.theme.AmoledBlack
 
 @RequiresApi(Build.VERSION_CODES.Q)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,6 +97,8 @@ fun GalleryScreen(
     val selectedMediaIds by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
     val showCreateAlbumDialog by viewModel.showCreateAlbumDialog.collectAsStateWithLifecycle()
     val isMovingMedia by viewModel.isMovingMedia.collectAsStateWithLifecycle()
+    val menuStyle by viewModel.menuStyle.collectAsStateWithLifecycle()
+    val albumBehavior by viewModel.albumBehavior.collectAsStateWithLifecycle()
     
     val items: LazyPagingItems<GalleryUiModel> =
         viewModel.pagedItems.collectAsLazyPagingItems()
@@ -169,7 +171,9 @@ fun GalleryScreen(
         LazyVerticalGrid(
             columns = GridCells.Fixed(animatedColumns),
             contentPadding = PaddingValues(
-                bottom = GalleryDesign.PaddingLarge,
+                bottom = if (menuStyle == MenuStyle.BOTTOM_FLOATING) {
+                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 90.dp
+                } else GalleryDesign.PaddingLarge,
                 start = GalleryDesign.PaddingSmall,
                 end = GalleryDesign.PaddingSmall
             ),
@@ -177,16 +181,26 @@ fun GalleryScreen(
             verticalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall),
             modifier = Modifier.fillMaxSize()
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                HeaderLayout(
-                    showFilters = showFilters,
-                    viewModel = viewModel,
-                    securityViewModel = securityViewModel,
-                    modifier = Modifier.alpha(0f)
-                )
+            if (menuStyle == MenuStyle.TOP_HEADER) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    HeaderLayout(
+                        showFilters = showFilters,
+                        viewModel = viewModel,
+                        securityViewModel = securityViewModel,
+                        modifier = Modifier.alpha(0f)
+                    )
+                }
+            } else if (menuStyle == MenuStyle.BOTTOM_FLOATING && (albumBehavior == AlbumBehavior.FLOATING_TOP || albumBehavior == AlbumBehavior.STATIC_TOP)) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(modifier = Modifier.statusBarsPadding().height(GalleryDesign.PaddingSmall + 110.dp))
+                }
+            } else {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(modifier = Modifier.statusBarsPadding().height(GalleryDesign.PaddingSmall))
+                }
             }
 
-            if (albums.isNotEmpty()) {
+            if (albums.isNotEmpty() && (menuStyle == MenuStyle.TOP_HEADER || albumBehavior == AlbumBehavior.FIXED_IN_GRID)) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     PremiumAlbumCarousel(
                         albums = albums,
@@ -320,7 +334,7 @@ fun GalleryScreen(
         }
 
         AnimatedVisibility(
-            visible = viewerItem == null,
+            visible = viewerItem == null && menuStyle == MenuStyle.TOP_HEADER,
             enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
             exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
         ) {
@@ -328,7 +342,7 @@ fun GalleryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(GalleryDesign.HeaderFullShape)
-                    .premiumBorder(shape = GalleryDesign.HeaderFullShape, alpha = GalleryDesign.AlphaBorderLight)
+                    .bottomPremiumBorder(alpha = GalleryDesign.AlphaBorderLight)
             ) {
                 Box(
                     modifier = Modifier
@@ -343,6 +357,120 @@ fun GalleryScreen(
                     securityViewModel = securityViewModel
                 )
             }
+        }
+
+        // --- CAROUSEL FLOTANTE / ESTÁTICO (Top) ---
+        AnimatedVisibility(
+            visible = viewerItem == null && menuStyle == MenuStyle.BOTTOM_FLOATING && (albumBehavior == AlbumBehavior.FLOATING_TOP || albumBehavior == AlbumBehavior.STATIC_TOP),
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (albumBehavior == AlbumBehavior.FLOATING_TOP) {
+                            Modifier
+                                .clip(GalleryDesign.HeaderFullShape)
+                                .bottomPremiumBorder(alpha = GalleryDesign.AlphaBorderLight)
+                        } else Modifier
+                    )
+            ) {
+                if (albumBehavior == AlbumBehavior.FLOATING_TOP) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .glassBackground()
+                            .blur(GalleryDesign.BlurRadius)
+                    )
+                } else if (albumBehavior == AlbumBehavior.STATIC_TOP) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(MaterialTheme.colorScheme.background)
+                    )
+                }
+
+                PremiumAlbumCarousel(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(
+                            all = GalleryDesign.PaddingSmall
+                        ),
+                    albums = albums,
+                    selectedAlbumId = selectedAlbum,
+                    onAlbumClick = { albumInfo ->
+                        if (albumInfo.id != "ALL_VIRTUAL_ALBUM" && securityViewModel.isAlbumLocked(albumInfo.id)) {
+                            val biom = (context as? FragmentActivity)?.let { BiometricPromptManager(it) }
+                            if (biom?.canAuthenticate() == true) {
+                                biom.authenticate(
+                                    title = "Álbum Privado",
+                                    subtitle = "Desbloquea este álbum",
+                                    onSuccess = { viewModel.toggleAlbum(albumInfo.id) },
+                                    onError = { /* Opcional mostrar error */ }
+                                )
+                            } else {
+                                viewModel.toggleAlbum(albumInfo.id) 
+                            }
+                        } else {
+                            viewModel.toggleAlbum(albumInfo.id)
+                        }
+                    },
+                    lockedAlbums = lockedAlbums,
+                    onAlbumLongClick = { albumInfo ->
+                        if (albumInfo.id != "ALL_VIRTUAL_ALBUM") {
+                            val biom = (context as? FragmentActivity)?.let { BiometricPromptManager(it) }
+                            if (biom?.canAuthenticate() == true) {
+                                biom.authenticate(
+                                    title = if (securityViewModel.isAlbumLocked(albumInfo.id)) "Desbloquear Álbum" else "Bloquear Álbum",
+                                    subtitle = "Autorización requerida",
+                                    onSuccess = { securityViewModel.toggleAlbumLock(albumInfo.id) },
+                                    onError = { /* Opcional error */ }
+                                )
+                            } else {
+                                securityViewModel.toggleAlbumLock(albumInfo.id)
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+        // --- SOMBRA / GRADIENTE (Navegación) ---
+        AnimatedVisibility(
+            visible = viewerItem == null && menuStyle == MenuStyle.BOTTOM_FLOATING,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp) // Suficiente para cubrir nav bars y la zona inferior del menú
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+            )
+        }
+
+        // --- MENÚ FLOTANTE (Bottom) ---
+        AnimatedVisibility(
+            visible = viewerItem == null && menuStyle == MenuStyle.BOTTOM_FLOATING,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier
+                .navigationBarsPadding()
+                .padding(bottom = 0.dp)
+                .align(Alignment.BottomCenter)
+        ) {
+            FloatingGalleryMenu(viewModel = viewModel)
         }
 
         var itemForTransition by remember { mutableStateOf<MediaItem?>(null) }
@@ -399,6 +527,24 @@ fun GalleryScreen(
 
         if (isMovingMedia) {
             LoadingOverlay(message = "Moviendo archivos...")
+        }
+
+        val showSettings by viewModel.showSettings.collectAsStateWithLifecycle()
+        AnimatedVisibility(
+            visible = showSettings,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+        ) {
+            SettingsScreen(
+                galleryViewModel = viewModel,
+                securityViewModel = securityViewModel,
+                onBack = { viewModel.hideSettings() }
+            )
+        }
+        
+        // Manejar el botón atrás de Android cuando los ajustes están abiertos
+        BackHandler(enabled = showSettings) {
+            viewModel.hideSettings()
         }
     }
 }

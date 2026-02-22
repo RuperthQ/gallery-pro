@@ -2,6 +2,7 @@ package com.my_gallery.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -9,6 +10,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,11 +67,11 @@ object GalleryDesign {
 
     val CardShape = RoundedCornerShape(CornerRadiusMedium)
     val FilterShape = RoundedCornerShape(CornerRadiusLarge)
-    val HeaderShape = RoundedCornerShape(bottomStart = CornerRadiusLarge, bottomEnd = CornerRadiusLarge)
+    val HeaderShape = RoundedCornerShape(CornerRadiusLarge)
     val HeaderFullShape = RoundedCornerShape(
-        topStart = BorderWidthNone, 
-        topEnd = BorderWidthNone, 
-        bottomStart = CornerRadiusLarge, 
+        topStart = BorderWidthNone,
+        topEnd = BorderWidthNone,
+        bottomStart = CornerRadiusLarge,
         bottomEnd = CornerRadiusLarge
     )
     val OverlayShape = RoundedCornerShape(CornerRadiusSmall)
@@ -132,12 +137,16 @@ object GalleryDesign {
         alpha1: Float = AlphaGlassHigh,
         alpha2: Float = AlphaGlassLow
     ) = composed {
+        val isDark = isSystemInDarkTheme()
+        val finalAlpha1 = if (!isDark && alpha1 == AlphaGlassHigh) 1.0f else alpha1
+        val finalAlpha2 = if (!isDark && alpha2 == AlphaGlassLow) 0.98f else alpha2
+        
         this.then(
             Modifier.background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.surface.copy(alpha = alpha1),
-                        MaterialTheme.colorScheme.surface.copy(alpha = alpha2)
+                        MaterialTheme.colorScheme.surface.copy(alpha = finalAlpha1),
+                        MaterialTheme.colorScheme.surface.copy(alpha = finalAlpha2)
                     )
                 )
             )
@@ -156,11 +165,70 @@ object GalleryDesign {
                     colors = listOf(
                         MaterialTheme.colorScheme.primary.copy(alpha = alpha + 0.2f),
                         MaterialTheme.colorScheme.primary.copy(alpha = AlphaSecondary),
-                        MaterialTheme.colorScheme.secondary.copy(alpha = alpha)
+                        MaterialTheme.colorScheme.primary.copy(alpha = alpha)
                     )
                 ),
                 shape = shape
             )
+        )
+    }
+
+    fun Modifier.bottomPremiumBorder(
+        width: Dp = BorderWidthThin,
+        cornerRadius: Dp = CornerRadiusLarge,
+        alpha: Float = AlphaBorderDefault
+    ) = composed {
+        val colors = listOf(
+            MaterialTheme.colorScheme.primary.copy(alpha = alpha + 0.2f),
+            MaterialTheme.colorScheme.primary.copy(alpha = AlphaSecondary),
+            MaterialTheme.colorScheme.primary.copy(alpha = alpha + 0.2f)
+        )
+        this.then(
+            Modifier.drawWithCache {
+                val strokeWidthPx = width.toPx()
+                val cornerRadiusPx = cornerRadius.toPx()
+                val widthPx = size.width
+                val heightPx = size.height
+                val inset = strokeWidthPx / 2f
+                
+                val brush = Brush.horizontalGradient(
+                    colors = colors,
+                    startX = 0f,
+                    endX = widthPx
+                )
+                
+                val path = Path().apply {
+                    moveTo(inset, 0f)
+                    lineTo(inset, heightPx - cornerRadiusPx)
+                    if (cornerRadiusPx > 0f) {
+                        arcTo(
+                            rect = Rect(inset, heightPx - 2 * cornerRadiusPx + inset, 2 * cornerRadiusPx - inset, heightPx - inset),
+                            startAngleDegrees = 180f,
+                            sweepAngleDegrees = -90f,
+                            forceMoveTo = false
+                        )
+                    }
+                    lineTo(widthPx - cornerRadiusPx, heightPx - inset)
+                    if (cornerRadiusPx > 0f) {
+                        arcTo(
+                            rect = Rect(widthPx - 2 * cornerRadiusPx + inset, heightPx - 2 * cornerRadiusPx + inset, widthPx - inset, heightPx - inset),
+                            startAngleDegrees = 90f,
+                            sweepAngleDegrees = -90f,
+                            forceMoveTo = false
+                        )
+                    }
+                    lineTo(widthPx - inset, 0f)
+                }
+                
+                onDrawWithContent {
+                    drawContent()
+                    drawPath(
+                        path = path,
+                        brush = brush,
+                        style = Stroke(width = strokeWidthPx)
+                    )
+                }
+            }
         )
     }
 }

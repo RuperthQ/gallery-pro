@@ -24,10 +24,11 @@ interface MediaDao {
         WHERE source = :source 
         AND dateAdded >= :start AND dateAdded < :end 
         AND mimeType LIKE :mimeType 
+        AND (width >= :minWidth AND height >= :minHeight OR width >= :minHeight AND height >= :minWidth OR :minWidth = 0)
         AND (
-            (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
+            (:albumId IS NOT NULL AND albumId = :albumId) 
+            OR (:albumId IS NULL AND albumId != 'SECURE_VAULT')
         )
-        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
         ORDER BY dateAdded DESC, id DESC
     """)
     fun pagingSourceAdvanced(
@@ -45,10 +46,11 @@ interface MediaDao {
         WHERE source = :source 
         AND dateAdded >= :start AND dateAdded < :end 
         AND mimeType LIKE :mimeType 
+        AND (width >= :minWidth AND height >= :minHeight OR width >= :minHeight AND height >= :minWidth OR :minWidth = 0)
         AND (
-            (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
+            (:albumId IS NOT NULL AND albumId = :albumId) 
+            OR (:albumId IS NULL AND albumId != 'SECURE_VAULT')
         )
-        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
         AND (
             dateAdded > (SELECT dateAdded FROM media_items WHERE id = :targetId)
             OR (dateAdded = (SELECT dateAdded FROM media_items WHERE id = :targetId) AND id > :targetId)
@@ -73,7 +75,10 @@ interface MediaDao {
         WHERE source = :source 
         AND strftime('%m-%Y', datetime(dateAdded/1000, 'unixepoch')) = :period
         AND mimeType LIKE :mimeType 
-        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
+        AND (
+            (:albumId IS NOT NULL AND albumId = :albumId) 
+            OR (:albumId IS NULL AND albumId != 'SECURE_VAULT')
+        )
     """)
     suspend fun getMediaIdsByPeriod(
         source: String,
@@ -86,10 +91,11 @@ interface MediaDao {
         WHERE source = :source 
         AND dateAdded >= :start AND dateAdded < :end 
         AND mimeType LIKE :mimeType 
+        AND (width >= :minWidth AND height >= :minHeight OR width >= :minHeight AND height >= :minWidth OR :minWidth = 0)
         AND (
-            (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
+            (:albumId IS NOT NULL AND albumId = :albumId) 
+            OR (:albumId IS NULL AND albumId != 'SECURE_VAULT')
         )
-        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
     """)
     suspend fun getMediaIds(
         source: String, 
@@ -154,10 +160,11 @@ interface MediaDao {
         FROM media_items 
         WHERE source = :source 
         AND mimeType LIKE :mimeType 
+        AND (width >= :minWidth AND height >= :minHeight OR width >= :minHeight AND height >= :minWidth OR :minWidth = 0)
         AND (
-            (width >= :minWidth AND height >= :minHeight) OR (width >= :minHeight AND height >= :minWidth)
+            (:albumId IS NOT NULL AND albumId = :albumId) 
+            OR (:albumId IS NULL AND albumId != 'SECURE_VAULT')
         )
-        AND (:albumId IS NOT NULL AND albumId = :albumId OR :albumId IS NULL AND albumId != 'SECURE_VAULT')
         GROUP BY period
         ORDER BY MAX(dateAdded) DESC
     """)

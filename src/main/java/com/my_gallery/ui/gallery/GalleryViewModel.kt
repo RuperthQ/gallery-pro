@@ -14,7 +14,8 @@ import android.app.Application
 import android.os.Build
 import androidx.annotation.RequiresApi
 import com.my_gallery.data.repository.MediaRepository
-import com.my_gallery.data.repository.RenameResult
+import com.my_gallery.data.repository.media.RenameResult
+import com.my_gallery.data.repository.media.DeleteResult
 import com.my_gallery.data.repository.SecurityRepository
 import com.my_gallery.data.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -111,11 +112,10 @@ class GalleryViewModel @Inject constructor(
     private val _viewerIndex = MutableStateFlow(0)
     val viewerIndex: StateFlow<Int> = _viewerIndex.asStateFlow()
 
-    private val _autoplayEnabled = MutableStateFlow(true)
-    val autoplayEnabled: StateFlow<Boolean> = _autoplayEnabled.asStateFlow()
+    val autoplayEnabled: StateFlow<Boolean> = settingsRepository.autoplayEnabled
 
     fun toggleAutoplay() {
-        _autoplayEnabled.value = !_autoplayEnabled.value
+        settingsRepository.setAutoplayEnabled(!autoplayEnabled.value)
     }
 
     // --- Modo Selección y Álbumes ---
@@ -222,7 +222,7 @@ class GalleryViewModel @Inject constructor(
             // Insertar álbum temporalmente en el carrusel después del primer elemento (Todo)
             val currentAlbums = _albums.value.toMutableList()
             val tempAlbum = AlbumItem(
-                id = "TEMP_ALBUM_${System.currentTimeMillis()}",
+                id = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DCIM), "Gallery_Pro/$name").absolutePath.lowercase().hashCode().toString(),
                 name = name,
                 thumbnail = "", 
                 count = 0
@@ -733,12 +733,12 @@ class GalleryViewModel @Inject constructor(
 
             val result = repository.deleteMedia(toDelete)
             when (result) {
-                is com.my_gallery.data.repository.DeleteResult.Success -> {
+                is com.my_gallery.data.repository.media.DeleteResult.Success -> {
                     _selectedMediaIds.value = emptySet()
                     _isSelectionMode.value = false
                     syncGallery()
                 }
-                is com.my_gallery.data.repository.DeleteResult.PermissionRequired -> {
+                is com.my_gallery.data.repository.media.DeleteResult.PermissionRequired -> {
                      // For API 30+, this intent performs the delete. We just need to sync after.
                      // For API < 30, we might need to retry? 
                      // Actually RecoverableSecurityException usually requires retry.
@@ -746,7 +746,7 @@ class GalleryViewModel @Inject constructor(
                      pendingDeleteItems = toDelete 
                      _pendingIntent.value = result.intentSender
                 }
-                is com.my_gallery.data.repository.DeleteResult.Error -> {
+                is com.my_gallery.data.repository.media.DeleteResult.Error -> {
                     // Handle error (show toast?)
                 }
             }
@@ -765,16 +765,16 @@ class GalleryViewModel @Inject constructor(
             try {
                 val result = repository.secureMediaItems(toSecure)
                 when (result) {
-                    is com.my_gallery.data.repository.DeleteResult.Success -> {
+                    is com.my_gallery.data.repository.media.DeleteResult.Success -> {
                         _selectedMediaIds.value = emptySet()
                         _isSelectionMode.value = false
                         syncGallery()
                     }
-                    is com.my_gallery.data.repository.DeleteResult.PermissionRequired -> {
+                    is com.my_gallery.data.repository.media.DeleteResult.PermissionRequired -> {
                          pendingSecureItems = toSecure 
                          _pendingIntent.value = result.intentSender
                     }
-                    is com.my_gallery.data.repository.DeleteResult.Error -> {
+                    is com.my_gallery.data.repository.media.DeleteResult.Error -> {
                         // Handle error (show toast?)
                     }
                 }
@@ -797,7 +797,7 @@ class GalleryViewModel @Inject constructor(
             try {
                 val result = repository.unsecureMediaItems(toUnsecure)
                 when (result) {
-                    is com.my_gallery.data.repository.DeleteResult.Success -> {
+                    is com.my_gallery.data.repository.media.DeleteResult.Success -> {
                         _selectedMediaIds.value = emptySet()
                         _isSelectionMode.value = false
                         syncGallery()

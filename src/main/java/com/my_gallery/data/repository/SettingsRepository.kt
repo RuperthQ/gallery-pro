@@ -39,6 +39,14 @@ class SettingsRepository @Inject constructor(
     )
     val themeColor: StateFlow<AppThemeColor> = _themeColor.asStateFlow()
 
+    private val _autoplayEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTOPLAY, true))
+    val autoplayEnabled: StateFlow<Boolean> = _autoplayEnabled.asStateFlow()
+
+    fun setAutoplayEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTOPLAY, enabled).apply()
+        _autoplayEnabled.value = enabled
+    }
+
     fun setMenuStyle(style: MenuStyle) {
         prefs.edit().putString(KEY_MENU_STYLE, style.name).apply()
         _menuStyle.value = style
@@ -70,5 +78,6 @@ class SettingsRepository @Inject constructor(
         private const val KEY_SHOW_EMPTY_ALBUMS = "KEY_SHOW_EMPTY_ALBUMS"
         private const val KEY_ALBUM_BEHAVIOR = "KEY_ALBUM_BEHAVIOR"
         private const val KEY_THEME_COLOR = "KEY_THEME_COLOR"
+        private const val KEY_AUTOPLAY = "KEY_AUTOPLAY"
     }
 }

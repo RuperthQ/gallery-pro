@@ -23,7 +23,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.*
+import androidx.compose.material.icons.filled.Refresh
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.my_gallery.ui.gallery.GalleryViewModel
 import com.my_gallery.ui.gallery.header_actions.HeaderAction
@@ -165,14 +169,53 @@ fun SelectionModeActions(viewModel: GalleryViewModel, selectedCount: Int) {
 fun NormalModeActions(viewModel: GalleryViewModel, showFilters: Boolean) {
     val orchestrator = remember(viewModel) { HeaderActionsOrchestrator(viewModel) }
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsStateWithLifecycle()
+    val isForceSyncing by viewModel.isForceSyncing.collectAsStateWithLifecycle()
     val actions = orchestrator.getNormalActions(showFilters, showEmptyAlbums)
 
-    actions.forEachIndexed { index, action ->
-        if (index > 0) Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
+    // El primer item es el Refresh
+    val refreshAction = actions.first()
+    val otherActions = actions.drop(1)
+
+    NormalRefreshButton(refreshAction, isForceSyncing)
+    
+    otherActions.forEach { action ->
+        Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
         HeaderActionButton(
             action = action,
             tint = if (action.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             backgroundColor = if (action.isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    }
+}
+
+@Composable
+fun NormalRefreshButton(action: HeaderAction, isSyncing: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "refreshAnim")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(GalleryDesign.IconSizeAction)
+            .clip(GalleryDesign.CardShape)
+            .background(if (isSyncing) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .clickable(enabled = !isSyncing, onClick = action.onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = action.icon,
+            contentDescription = action.description,
+            tint = if (isSyncing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .size(GalleryDesign.IconSizeNormal)
+                .then(if (isSyncing) Modifier.graphicsLayer { rotationZ = rotation } else Modifier)
         )
     }
 }

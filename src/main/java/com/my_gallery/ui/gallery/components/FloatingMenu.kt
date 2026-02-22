@@ -1,28 +1,68 @@
 package com.my_gallery.ui.gallery.components
 
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.my_gallery.ui.gallery.GalleryViewModel
-import com.my_gallery.ui.gallery.header_actions.*
+import com.my_gallery.ui.gallery.header_actions.ChangeGridAction
+import com.my_gallery.ui.gallery.header_actions.CreateAlbumAction
+import com.my_gallery.ui.gallery.header_actions.HeaderAction
+import com.my_gallery.ui.gallery.header_actions.HeaderActionsOrchestrator
+import com.my_gallery.ui.gallery.header_actions.RefreshGalleryAction
+import com.my_gallery.ui.gallery.header_actions.SettingsAction
+import com.my_gallery.ui.gallery.header_actions.ToggleEmptyAlbumsAction
+import com.my_gallery.ui.gallery.header_actions.ToggleFilterAction
+import com.my_gallery.ui.gallery.header_actions.ToggleSelectionAction
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.glassBackground
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
-import androidx.compose.material.icons.Icons
 
 @Composable
 fun FloatingGalleryMenu(
@@ -34,6 +74,7 @@ fun FloatingGalleryMenu(
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsStateWithLifecycle()
     val isAlbumCreationPending by viewModel.isAlbumCreationPending.collectAsStateWithLifecycle()
+    val isForceSyncing by viewModel.isForceSyncing.collectAsStateWithLifecycle()
     
     val orchestrator = remember(viewModel) { HeaderActionsOrchestrator(viewModel) }
     var extraExpanded by remember { mutableStateOf(false) }
@@ -79,6 +120,10 @@ fun FloatingGalleryMenu(
                         modifier = Modifier.padding(GalleryDesign.PaddingSmall),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
+                        FloatingMenuLabeledRow(
+                            action = RefreshGalleryAction(viewModel)(),
+                            isSyncing = isForceSyncing
+                        )
                         FloatingMenuLabeledRow(ToggleEmptyAlbumsAction(viewModel, showEmptyAlbums)())
                         FloatingMenuLabeledRow(ChangeGridAction(viewModel)())
                         FloatingMenuLabeledRow(SettingsAction(viewModel)())
@@ -257,13 +302,26 @@ fun FloatingGalleryMenu(
 
 @Composable
 fun FloatingMenuLabeledRow(
-    action: HeaderAction
+    action: HeaderAction,
+    isSyncing: Boolean = false
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "refreshAnim")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
     Surface(
-        onClick = action.onClick,
+        onClick = { if (!isSyncing) action.onClick() },
         color = Color.Transparent,
         shape = GalleryDesign.CardShape,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !isSyncing
     ) {
         Row(
             modifier = Modifier
@@ -274,24 +332,26 @@ fun FloatingMenuLabeledRow(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(GalleryDesign.CardShape)
-                    .background(if (action.isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent),
+                    .background(if (action.isSelected || isSyncing) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = action.icon,
                     contentDescription = null,
-                    tint = if (action.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    modifier = Modifier.size(GalleryDesign.IconSizeSmall)
+                    tint = if (action.isSelected || isSyncing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .size(GalleryDesign.IconSizeSmall)
+                        .then(if (isSyncing) Modifier.graphicsLayer { rotationZ = rotation } else Modifier)
                 )
             }
             
             Spacer(modifier = Modifier.width(GalleryDesign.PaddingMedium))
             
             Text(
-                text = action.description,
+                text = if (isSyncing) "Refrescando..." else action.description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (action.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                fontWeight = if (action.isSelected) FontWeight.SemiBold else FontWeight.Normal
+                color = if (action.isSelected || isSyncing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (action.isSelected || isSyncing) FontWeight.SemiBold else FontWeight.Normal
             )
         }
     }

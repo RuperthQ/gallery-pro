@@ -151,6 +151,9 @@ class GalleryViewModel @Inject constructor(
     private val _isUnsecuringMedia = MutableStateFlow(false)
     val isUnsecuringMedia: StateFlow<Boolean> = _isUnsecuringMedia.asStateFlow()
 
+    private val _isForceSyncing = MutableStateFlow(false)
+    val isForceSyncing: StateFlow<Boolean> = _isForceSyncing.asStateFlow()
+
     private val _showDeleteConfirmation = MutableStateFlow(false)
     val showDeleteConfirmation: StateFlow<Boolean> = _showDeleteConfirmation.asStateFlow()
 
@@ -658,9 +661,29 @@ class GalleryViewModel @Inject constructor(
     fun syncGallery() {
         groupIdsCache.clear()
         viewModelScope.launch {
-            repository.syncLocalGallery()
+            repository.syncLocalGallery(force = false)
             delay(500) // Small delay to let MediaStore update
             loadAlbums()
+        }
+    }
+
+    fun forceSyncGallery() {
+        groupIdsCache.clear()
+        viewModelScope.launch {
+            _isForceSyncing.value = true
+            try {
+                repository.syncLocalGallery(force = true)
+                
+                // Forzar refresco del Pager reiniciando el filtro de álbum
+                val current = _selectedAlbum.value
+                _selectedAlbum.value = "REFRESHING..."
+                delay(300)
+                _selectedAlbum.value = current
+                
+                loadAlbums()
+            } finally {
+                _isForceSyncing.value = false
+            }
         }
     }
 

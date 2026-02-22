@@ -130,10 +130,14 @@ class MediaRepository @Inject constructor(
     /**
      * Sincroniza la galería local (Fotos y Videos) con Room en segundo plano.
      */
-    suspend fun syncLocalGallery() = withContext(Dispatchers.IO) {
+    suspend fun syncLocalGallery(force: Boolean = false) = withContext(Dispatchers.IO) {
         if (syncMutex.isLocked) return@withContext
         syncMutex.withLock {
             try {
+                if (force) {
+                    mediaDao.clearBySource("LOCAL")
+                }
+                
                 val mediaUris = listOf(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI to "img",
                     MediaStore.Video.Media.EXTERNAL_CONTENT_URI to "vid"
@@ -148,16 +152,18 @@ class MediaRepository @Inject constructor(
                             MediaStore.MediaColumns._ID,
                             MediaStore.MediaColumns.DISPLAY_NAME,
                             MediaStore.MediaColumns.DATE_ADDED,
+                            MediaStore.MediaColumns.DATE_MODIFIED,
                             MediaStore.MediaColumns.MIME_TYPE,
                             MediaStore.MediaColumns.SIZE,
                             MediaStore.MediaColumns.WIDTH,
                             MediaStore.MediaColumns.HEIGHT,
                             MediaStore.MediaColumns.DATA,
                             MediaStore.MediaColumns.BUCKET_ID,
+                            "datetaken", // MediaStore.Images.Media.DATE_TAKEN y VideoColumns.DATE_TAKEN
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.MediaColumns.RELATIVE_PATH else MediaStore.MediaColumns.DATA
                         ).filterNotNull().toTypedArray(), 
                         null, null,
-                        "${MediaStore.MediaColumns.DATE_ADDED} DESC"
+                        "datetaken DESC, ${MediaStore.MediaColumns.DATE_ADDED} DESC"
                     )
 
                     cursor?.use {
@@ -177,16 +183,46 @@ class MediaRepository @Inject constructor(
                             val absolutePath = it.getString(dataCol)
                             val bucketId = it.getString(bucketIdCol)
                             
-                            val originalDate = it.getLong(dateCol) * 1000L
+                            val dateAddedSec = it.getLong(it.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED))
+                            val dateModifiedSec = it.getLong(it.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED))
+                            val dateTakenMs = it.getLong(it.getColumnIndexOrThrow("datetaken"))
+                            
+                            // 1. Intentar con DATE_TAKEN (milisegundos)
+                            // 2. Intentar con DATE_ADDED (segundos -> ms)
+                            // 3. Intentar con DATE_MODIFIED (segundos -> ms)
+                            val timestamps = listOf(
+                                dateTakenMs,
+                                dateAddedSec * 1000L,
+                                dateModifiedSec * 1000L
+                            )
+                            
+                            var rawTimestampMs = timestamps.find { it > 946684800000L } ?: 0L
+                            
+                            // Si sigue siendo 0 o inválido, intentar con la fecha del archivo físico
+                            if (rawTimestampMs < 946684800000L && absolutePath != null) {
+                                try {
+                                    val file = java.io.File(absolutePath)
+                                    if (file.exists()) {
+                                        val lastMod = file.lastModified()
+                                        if (lastMod > 946684800000L) rawTimestampMs = lastMod
+                                    }
+                                } catch (e: Exception) {}
+                            }
+
                             val name = it.getString(nameCol) ?: "Local Media"
-                            val finalDate = MediaDateParser.parseDateFromFileName(name, originalDate)
+                            val finalDate = MediaDateParser.parseDateFromFileName(name, rawTimestampMs)
+                            
+                            // Fallback final: si todo falla y el nombre no ayuda, no podemos dejarlo en 1969 si el usuario dice que es de 2024.
+                            // Pero sin metadata, 1969 es el comportamiento por defecto de 0.
+                            // Si finalDate sigue siendo < 2000, y MediaStore dice que se añadió hace poco, usar eso aunque sea impreciso.
+                            val resultDate = if (finalDate < 946684800000L && dateAddedSec > 0) dateAddedSec * 1000L else finalDate
 
                             allEntities.add(MediaEntity(
                                 id = "${typePrefix}_$id",
                                 url = contentUri,
                                 thumbnail = contentUri,
                                 title = name,
-                                dateAdded = finalDate,
+                                dateAdded = resultDate,
                                 mimeType = it.getString(mimeCol) ?: "image/jpeg",
                                 size = it.getLong(sizeCol),
                                 width = it.getInt(widthCol),

@@ -19,7 +19,11 @@ object MediaDateParser {
         // Pattern: 2023-10-27 (Date only)
         Pattern.compile("(\\d{4})-(\\d{2})-(\\d{2})"),
         // Pattern: 2023_10_27 (Date only)
-        Pattern.compile("(\\d{4})_(\\d{2})_(\\d{2})")
+        Pattern.compile("(\\d{4})_(\\d{2})_(\\d{2})"),
+        // Pattern: IMG-20231027-WA
+        Pattern.compile("IMG-(\\d{4})(\\d{2})(\\d{2})-WA"),
+        // Pattern: VID-20231027-WA
+        Pattern.compile("VID-(\\d{4})(\\d{2})(\\d{2})-WA")
     )
 
     fun parseDateFromFileName(fileName: String, fallbackTimestamp: Long): Long {

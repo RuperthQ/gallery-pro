@@ -7,6 +7,7 @@ class HeaderActionsOrchestrator(
 ) {
     fun getNormalActions(showFilters: Boolean, showEmptyAlbums: Boolean): List<HeaderAction> {
         return listOf(
+            RefreshGalleryAction(viewModel)(),
             CreateAlbumAction(viewModel)(),
             ChangeGridAction(viewModel)(),
             ToggleFilterAction(viewModel, showFilters)(),

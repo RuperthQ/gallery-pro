@@ -23,24 +23,20 @@ fun GalleryDialogOrchestrator(
     onShowMetadata: (com.my_gallery.domain.model.MediaItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val showCreateAlbumDialog by viewModel.showCreateAlbumDialog.collectAsStateWithLifecycle()
-    val showMoveToAlbumDialog by viewModel.showMoveToAlbumDialog.collectAsStateWithLifecycle()
-    val showDeleteConfirmation by viewModel.showDeleteConfirmation.collectAsStateWithLifecycle()
-    val isMovingMedia by viewModel.isMovingMedia.collectAsStateWithLifecycle()
-    val showSettings by viewModel.showSettings.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val viewerItem by viewModel.viewerItem.collectAsStateWithLifecycle()
     val viewerIndex by viewModel.viewerIndex.collectAsStateWithLifecycle()
     val selectedMediaIds by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
 
     // --- DIÁLOGOS ---
-    if (showCreateAlbumDialog) {
+    if (uiState.showCreateAlbumDialog) {
         CreateAlbumDialog(
             viewModel = viewModel,
             onDismiss = { viewModel.hideCreateAlbumDialog() }
         )
     }
 
-    if (showMoveToAlbumDialog) {
+    if (uiState.showMoveToAlbumDialog) {
         MoveToAlbumDialog(
             albums = albums,
             viewModel = viewModel,
@@ -48,7 +44,7 @@ fun GalleryDialogOrchestrator(
         )
     }
 
-    if (showDeleteConfirmation) {
+    if (uiState.showDeleteConfirmation) {
         DeleteConfirmationDialog(
             count = selectedMediaIds.size,
             onConfirm = { 
@@ -59,7 +55,7 @@ fun GalleryDialogOrchestrator(
         )
     }
 
-    if (isMovingMedia) {
+    if (uiState.isMovingMedia) {
         LoadingOverlay(message = "Moviendo archivos...")
     }
 
@@ -85,7 +81,7 @@ fun GalleryDialogOrchestrator(
 
     // --- PANTALLA DE AJUSTES ---
     AnimatedVisibility(
-        visible = showSettings,
+        visible = uiState.showSettings,
         enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
     ) {

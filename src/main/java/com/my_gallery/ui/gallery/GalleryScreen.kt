@@ -26,7 +26,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.my_gallery.ui.gallery.components.*
-import com.my_gallery.ui.gallery.utils.BiometricHandler
+import com.my_gallery.ui.gallery.handlers.*
 import com.my_gallery.ui.security.SecurityViewModel
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.glassBackground
@@ -40,16 +40,13 @@ fun GalleryScreen(
     securityViewModel: SecurityViewModel = hiltViewModel()
 ) {
     // --- ESTADOS COLECTADOS ---
-    val columnCount by viewModel.columnCount.collectAsStateWithLifecycle()
-    val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val pendingActions by viewModel.pendingActions.collectAsStateWithLifecycle()
     val selectedItem by viewModel.selectedItem.collectAsStateWithLifecycle()
     val viewerItem by viewModel.viewerItem.collectAsStateWithLifecycle()
-    val pendingIntent by viewModel.pendingIntent.collectAsStateWithLifecycle()
-    val isEditPermissionGranted by viewModel.isEditPermissionGranted.collectAsStateWithLifecycle()
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val selectedAlbum by viewModel.selectedAlbum.collectAsStateWithLifecycle()
     val lockedAlbums by securityViewModel.lockedAlbums.collectAsStateWithLifecycle(initialValue = emptySet())
-    val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
     val selectedMediaIds by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
     val menuStyle by viewModel.menuStyle.collectAsStateWithLifecycle()
     val albumBehavior by viewModel.albumBehavior.collectAsStateWithLifecycle()
@@ -62,54 +59,12 @@ fun GalleryScreen(
     val sheetState = rememberModalBottomSheetState()
 
     // --- MANEJO DE PERMISOS Y CICLO DE VIDA ---
-    val intentSenderLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { result -> 
-        viewModel.onPermissionResult(result.resultCode == android.app.Activity.RESULT_OK)
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        if (permissions.values.all { it }) viewModel.syncGallery()
-    }
-
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.checkEditPermission()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    LaunchedEffect(Unit) {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VIDEO)
-        } else arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-        permissionLauncher.launch(permissions)
-    }
-
-    LaunchedEffect(pendingIntent) {
-        pendingIntent?.let { intentSender ->
-            intentSenderLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
-        }
-    }
+    setupPermissionsAndIntents(viewModel, pendingActions.intentSender)
+    observeGalleryLifecycle(viewModel)
 
     // --- ACCIONES REUTILIZABLES ---
-    val onAlbumClick: (com.my_gallery.domain.model.AlbumItem) -> Unit = { album ->
-        if (album.id != "ALL_VIRTUAL_ALBUM" && securityViewModel.isAlbumLocked(album.id)) {
-            BiometricHandler.authenticateAlbumAction(context, album, true, 
-                onSuccess = { viewModel.toggleAlbum(album.id) })
-        } else viewModel.toggleAlbum(album.id)
-    }
-
-    val onAlbumLongClick: (com.my_gallery.domain.model.AlbumItem) -> Unit = { album ->
-        if (album.id != "ALL_VIRTUAL_ALBUM") {
-            BiometricHandler.authenticateAlbumAction(context, album, securityViewModel.isAlbumLocked(album.id),
-                onSuccess = { securityViewModel.toggleAlbumLock(album.id) })
-        }
-    }
+    val onAlbumClick = rememberAlbumClick(context, viewModel, securityViewModel)
+    val onAlbumLongClick = rememberAlbumLongClick(context, securityViewModel)
 
     // --- UI ORQUESTADA ---
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -119,14 +74,14 @@ fun GalleryScreen(
             items = items,
             viewModel = viewModel,
             securityViewModel = securityViewModel,
-            columnCount = columnCount,
+            columnCount = viewModel.columnCount.collectAsStateWithLifecycle().value,
             menuStyle = menuStyle,
             albumBehavior = albumBehavior,
             albums = albums,
             selectedAlbum = selectedAlbum,
             lockedAlbums = lockedAlbums,
-            isEditPermissionGranted = isEditPermissionGranted,
-            isSelectionMode = isSelectionMode,
+            isEditPermissionGranted = uiState.isEditPermissionGranted,
+            isSelectionMode = uiState.isSelectionMode,
             selectedMediaIds = selectedMediaIds,
             onAlbumClick = onAlbumClick,
             onAlbumLongClick = onAlbumLongClick,
@@ -152,7 +107,7 @@ fun GalleryScreen(
             securityViewModel = securityViewModel,
             menuStyle = menuStyle,
             albumBehavior = albumBehavior,
-            showFilters = showFilters,
+            showFilters = uiState.showFilters,
             albums = albums,
             selectedAlbum = selectedAlbum,
             lockedAlbums = lockedAlbums,
@@ -194,8 +149,6 @@ fun GalleryScreen(
         )
 
         // --- BACK HANDLERS ---
-        BackHandler(enabled = isSelectionMode && viewerItem == null) { viewModel.exitSelection() }
-        val showSettings by viewModel.showSettings.collectAsStateWithLifecycle()
-        BackHandler(enabled = showSettings) { viewModel.hideSettings() }
+        setupGalleryBackHandlers(viewModel, uiState.isSelectionMode, uiState.showSettings, viewerItem)
     }
 }

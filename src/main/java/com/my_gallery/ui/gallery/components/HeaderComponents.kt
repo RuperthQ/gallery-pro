@@ -109,12 +109,12 @@ fun HeaderLayout(
 }
 
 @Composable
-fun HeaderActionsRow(viewModel: GalleryViewModel, showFilters: Boolean) {
+    fun HeaderActionsRow(viewModel: GalleryViewModel, showFilters: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
+        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
         val selectedItems by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
 
-        if (isSelectionMode) {
+        if (uiState.isSelectionMode) {
             SelectionModeActions(viewModel, selectedItems.size)
         } else {
             NormalModeActions(viewModel, showFilters)
@@ -124,7 +124,7 @@ fun HeaderActionsRow(viewModel: GalleryViewModel, showFilters: Boolean) {
 
 @Composable
 fun SelectionModeActions(viewModel: GalleryViewModel, selectedCount: Int) {
-    val isAlbumCreationPending by viewModel.isAlbumCreationPending.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val orchestrator = remember(viewModel) { HeaderActionsOrchestrator(viewModel) }
     
     // Counter
@@ -138,7 +138,7 @@ fun SelectionModeActions(viewModel: GalleryViewModel, selectedCount: Int) {
     // Main Actions
     Row(horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall)) {
         val areAllSecured = viewModel.areAllSelectedSecured()
-        val actions = orchestrator.getSelectionActions(isAlbumCreationPending, selectedCount, areAllSecured)
+        val actions = orchestrator.getSelectionActions(uiState.isAlbumCreationPending, selectedCount, areAllSecured)
         actions.forEach { action ->
             val tint = if (action.description == "Eliminar") MaterialTheme.colorScheme.error 
                       else if (action.description == "Mover") MaterialTheme.colorScheme.tertiary
@@ -169,14 +169,15 @@ fun SelectionModeActions(viewModel: GalleryViewModel, selectedCount: Int) {
 fun NormalModeActions(viewModel: GalleryViewModel, showFilters: Boolean) {
     val orchestrator = remember(viewModel) { HeaderActionsOrchestrator(viewModel) }
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsStateWithLifecycle()
-    val isForceSyncing by viewModel.isForceSyncing.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val actions = orchestrator.getNormalActions(showFilters, showEmptyAlbums)
+    val isSyncing = uiState.isForceSyncing
 
     // El primer item es el Refresh
     val refreshAction = actions.first()
     val otherActions = actions.drop(1)
 
-    NormalRefreshButton(refreshAction, isForceSyncing)
+    NormalRefreshButton(refreshAction, isSyncing)
     
     otherActions.forEach { action ->
         Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))

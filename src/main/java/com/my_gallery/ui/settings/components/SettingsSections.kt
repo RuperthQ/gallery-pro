@@ -162,6 +162,84 @@ fun PlayerSection(
 }
 
 @Composable
+fun InteractionSection(
+    autoNavigateEnabled: Boolean,
+    onToggleAutoNavigate: (Boolean) -> Unit,
+    shortDateEnabled: Boolean,
+    onToggleShortDate: (Boolean) -> Unit
+) {
+    Column {
+        SettingsSectionTitle("Interacción")
+        SettingsCard {
+            Column {
+                SettingsToggleRow(
+                    title = "Navegación Automática",
+                    description = "Entra directamente al nuevo álbum tras crear o mover archivos.",
+                    icon = Icons.Default.Launch,
+                    checked = autoNavigateEnabled,
+                    onCheckedChange = onToggleAutoNavigate
+                )
+                
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+
+                SettingsToggleRow(
+                    title = "Fechas Cortas",
+                    description = "Abrevia los meses en los filtros.\nEj: Ene 2024",
+                    icon = Icons.Default.CalendarViewMonth,
+                    checked = shortDateEnabled,
+                    onCheckedChange = onToggleShortDate
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FilterSettingsSection(
+    showType: Boolean,
+    showRes: Boolean,
+    showExt: Boolean,
+    onToggleType: (Boolean) -> Unit,
+    onToggleRes: (Boolean) -> Unit,
+    onToggleExt: (Boolean) -> Unit
+) {
+    Column {
+        SettingsSectionTitle("Filtros")
+        SettingsCard {
+            Column {
+                SettingsToggleRow(
+                    title = "Agrupar por Tipo",
+                    description = "Ver filtros de Imagen y Video.",
+                    icon = Icons.Default.FilterList,
+                    checked = showType,
+                    onCheckedChange = onToggleType
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsToggleRow(
+                    title = "Agrupar por Resolución",
+                    description = "Ver filtros de 4K, 2K, 1080P, etc.",
+                    icon = Icons.Default.AspectRatio,
+                    checked = showRes,
+                    onCheckedChange = onToggleRes
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsToggleRow(
+                    title = "Agrupar por Extensión",
+                    description = "Ver filtros de JPG, PNG, RAW, MP4, etc.",
+                    icon = Icons.Default.Extension,
+                    checked = showExt,
+                    onCheckedChange = onToggleExt
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun AboutSection() {
     Column {
         SettingsSectionTitle("Acerca de")

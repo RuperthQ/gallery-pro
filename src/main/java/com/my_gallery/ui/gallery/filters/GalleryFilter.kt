@@ -10,7 +10,7 @@ interface GalleryFilter {
     fun getOptions(): State<List<String>>
 
     @Composable
-    fun getSelectedOption(): State<String?>
+    fun getSelectedOptions(): State<Set<String>>
 
     fun onOptionSelected(option: String)
 }

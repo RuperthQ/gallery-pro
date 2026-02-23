@@ -69,20 +69,16 @@ fun FloatingGalleryMenu(
     viewModel: GalleryViewModel,
     modifier: Modifier = Modifier
 ) {
-    val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedMediaIds by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
-    val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val showEmptyAlbums by viewModel.showEmptyAlbums.collectAsStateWithLifecycle()
-    val isAlbumCreationPending by viewModel.isAlbumCreationPending.collectAsStateWithLifecycle()
-    val isForceSyncing by viewModel.isForceSyncing.collectAsStateWithLifecycle()
     
     val orchestrator = remember(viewModel) { HeaderActionsOrchestrator(viewModel) }
     var extraExpanded by remember { mutableStateOf(false) }
-    val showSettings by viewModel.showSettings.collectAsStateWithLifecycle()
 
     // Autocerrar el submenú cuando se entra a los ajustes, a selección, o se abren los filtros
-    LaunchedEffect(showSettings, isSelectionMode, showFilters) {
-        if (showSettings || isSelectionMode || showFilters) {
+    LaunchedEffect(uiState.showSettings, uiState.isSelectionMode, uiState.showFilters) {
+        if (uiState.showSettings || uiState.isSelectionMode || uiState.showFilters) {
             extraExpanded = false
         }
     }
@@ -93,16 +89,54 @@ fun FloatingGalleryMenu(
             .padding(horizontal = GalleryDesign.PaddingLarge, vertical = GalleryDesign.PaddingMedium),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // --- SUBMENÚ FLOTANTE (MODAL STYLE) ---
-        // Se coloca fuera del Surface para que no expanda el contenedor principal
+
+
+        // --- FILTROS ACTIVOS (PILLS) ---
+        ActiveFilterPills(
+            viewModel = viewModel,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = if (uiState.showFilters) GalleryDesign.FloatingMenuFilterOffset else GalleryDesign.FloatingMenuBottomOffset)
+        )
+
+        // --- FILTROS FLOTANTES (SELECTOR) ---
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
-                .padding(bottom = 70.dp),
+                .padding(bottom = GalleryDesign.FloatingMenuSubMenuOffset),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            AnimatedVisibility(
+                visible = uiState.showFilters && !uiState.isSelectionMode,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom) + scaleIn(transformOrigin = TransformOrigin(0.5f, 1f)),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom) + scaleOut(transformOrigin = TransformOrigin(0.5f, 1f))
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(GalleryDesign.FilterShape)
+                        .glassBackground()
+                        .premiumBorder(shape = GalleryDesign.FilterShape),
+                    shape = GalleryDesign.FilterShape,
+                    color = Color.Transparent,
+                    tonalElevation = GalleryDesign.ElevationSmall
+                ) {
+                    Column {
+                        FilterRow(viewModel = viewModel)
+                    }
+                }
+            }
+        }
+
+        // --- SUBMENÚ FLOTANTE (MODAL STYLE / Z-INDEX ALTO) ---
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .padding(bottom = GalleryDesign.FloatingMenuSubMenuOffset),
             contentAlignment = Alignment.BottomEnd
         ) {
             AnimatedVisibility(
-                visible = extraExpanded && !isSelectionMode,
+                visible = extraExpanded && !uiState.isSelectionMode,
                 enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom) + scaleIn(transformOrigin = TransformOrigin(1f, 1f)),
                 exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom) + scaleOut(transformOrigin = TransformOrigin(1f, 1f))
             ) {
@@ -122,40 +156,11 @@ fun FloatingGalleryMenu(
                     ) {
                         FloatingMenuLabeledRow(
                             action = RefreshGalleryAction(viewModel)(),
-                            isSyncing = isForceSyncing
+                            isSyncing = uiState.isForceSyncing
                         )
                         FloatingMenuLabeledRow(ToggleEmptyAlbumsAction(viewModel, showEmptyAlbums)())
                         FloatingMenuLabeledRow(ChangeGridAction(viewModel)())
                         FloatingMenuLabeledRow(SettingsAction(viewModel)())
-                    }
-                }
-            }
-        }
-
-        // --- FILTROS FLOTANTES (MODAL STYLE) ---
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .padding(bottom = 70.dp),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            AnimatedVisibility(
-                visible = showFilters && !isSelectionMode,
-                enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom) + scaleIn(transformOrigin = TransformOrigin(0.5f, 1f)),
-                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom) + scaleOut(transformOrigin = TransformOrigin(0.5f, 1f))
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(GalleryDesign.FilterShape)
-                        .glassBackground()
-                        .premiumBorder(shape = GalleryDesign.FilterShape),
-                    shape = GalleryDesign.FilterShape,
-                    color = Color.Transparent,
-                    tonalElevation = GalleryDesign.ElevationSmall
-                ) {
-                    Column {
-                        FilterRow(viewModel = viewModel)
                     }
                 }
             }
@@ -180,7 +185,7 @@ fun FloatingGalleryMenu(
             ) {
                 // --- SLOT IZQUIERDO (Bloqueo) ---
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (!isSelectionMode) {
+                    if (!uiState.isSelectionMode) {
                         val isAppLocked by viewModel.isAppLocked.collectAsStateWithLifecycle(initialValue = false)
                         val context = androidx.compose.ui.platform.LocalContext.current
                         
@@ -233,9 +238,9 @@ fun FloatingGalleryMenu(
                         horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (isSelectionMode) {
+                        if (uiState.isSelectionMode) {
                             val areAllSecured = viewModel.areAllSelectedSecured()
-                            val actions = orchestrator.getSelectionActions(isAlbumCreationPending, selectedMediaIds.size, areAllSecured)
+                            val actions = orchestrator.getSelectionActions(uiState.isAlbumCreationPending, selectedMediaIds.size, areAllSecured)
                             
                             Text(
                                 text = "${selectedMediaIds.size}",
@@ -254,7 +259,7 @@ fun FloatingGalleryMenu(
                             )
                         } else {
                             FloatingMenuButton(CreateAlbumAction(viewModel)())
-                            FloatingMenuButton(ToggleFilterAction(viewModel, showFilters)())
+                            FloatingMenuButton(ToggleFilterAction(viewModel, uiState.showFilters)())
                             FloatingMenuButton(ToggleSelectionAction(viewModel)())
                         }
                     }
@@ -262,7 +267,7 @@ fun FloatingGalleryMenu(
 
                 // --- SLOT DERECHO (Ajustes Rápidos) ---
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                    if (!isSelectionMode) {
+                    if (!uiState.isSelectionMode) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             VerticalDivider(
                                 modifier = Modifier
@@ -275,7 +280,7 @@ fun FloatingGalleryMenu(
                             IconButton(
                                 onClick = { 
                                     extraExpanded = !extraExpanded
-                                    if (extraExpanded && showFilters) {
+                                    if (extraExpanded && uiState.showFilters) {
                                         // Ocultar filtros si se abre el submenú de ajustes rápido
                                         viewModel.toggleFilters()
                                     }

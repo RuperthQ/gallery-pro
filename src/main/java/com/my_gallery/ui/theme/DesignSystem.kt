@@ -58,6 +58,18 @@ object GalleryDesign {
     val CarouselImagePadding = 3.dp
     
     val LetterSpacingSmall = 0.4.sp
+    
+    // --- Filter Pills & Menu Offsets ---
+    val PillPaddingHorizontal = 14.dp
+    val PillPaddingVertical = 8.dp
+    val PillIconSize = 16.dp
+    val PillFontSize = 13.sp
+    val PillClearBoxSize = 20.dp
+    val PillClearIconSize = 12.dp
+    
+    val FloatingMenuBottomOffset = 56.dp
+    val FloatingMenuFilterOffset = 120.dp
+    val FloatingMenuSubMenuOffset = 70.dp
 
     // --- Formas (Shapes) ---
     val CornerRadiusLarge = 20.dp

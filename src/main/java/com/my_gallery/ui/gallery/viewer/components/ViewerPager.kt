@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.paging.compose.LazyPagingItems
+import com.my_gallery.domain.model.MediaItem
 import com.my_gallery.ui.components.VideoPlayer
 import com.my_gallery.ui.gallery.GalleryUiModel
 import com.my_gallery.ui.gallery.GalleryViewModel
@@ -26,6 +27,8 @@ import kotlin.math.abs
 fun ViewerPager(
     items: LazyPagingItems<GalleryUiModel>,
     pagerState: PagerState,
+    initialItem: MediaItem,
+    initialIndex: Int,
     isLocked: Boolean,
     globalScale: Float,
     autoplayEnabled: Boolean,
@@ -48,7 +51,15 @@ fun ViewerPager(
         pageSpacing = GalleryDesign.PaddingLarge
     ) { pageIndex ->
         val uiModel = items[pageIndex]
-        if (uiModel is GalleryUiModel.Media) {
+        
+        // --- LOGICA DE FALLBACK PARA EVITAR "CARGANDO" EN EL ITEM INICIAL ---
+        val mediaItem = when {
+            uiModel is GalleryUiModel.Media -> uiModel.item
+            pageIndex == initialIndex -> initialItem
+            else -> null
+        }
+
+        if (mediaItem != null) {
             val pageOffset = (pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction
             val absOffset = abs(pageOffset).coerceIn(0f, 1f)
             
@@ -64,9 +75,9 @@ fun ViewerPager(
                         translationX = pageOffset * size.width * 0.2f
                     }
             ) {
-                if (uiModel.item.mimeType.startsWith("video/")) {
+                if (mediaItem.mimeType.startsWith("video/")) {
                     VideoPage(
-                        uiModel = uiModel,
+                        mediaItem = mediaItem,
                         isActive = pagerState.currentPage == pageIndex,
                         isLocked = isLocked,
                         autoplayEnabled = autoplayEnabled,
@@ -81,18 +92,13 @@ fun ViewerPager(
                     )
                 } else {
                     ZoomableMedia(
-                        item = uiModel.item,
-                        rotation = uiModel.item.rotation,
+                        item = mediaItem,
+                        rotation = mediaItem.rotation,
                         onScaleChange = onScaleChange,
-                        onRotate = { viewModel.rotateMedia(uiModel.item) },
+                        onRotate = { viewModel.rotateMedia(mediaItem) },
                         onTap = onToggleUi,
                         onLongPress = onShowMenu
                     )
-                }
-
-                if (uiModel.item.albumId == "SECURE_VAULT") {
-                    FlickerShield()
-                    PrivacyFilter()
                 }
             }
         } else {
@@ -105,7 +111,7 @@ fun ViewerPager(
 
 @Composable
 private fun VideoPage(
-    uiModel: GalleryUiModel.Media,
+    mediaItem: MediaItem,
     isActive: Boolean,
     isLocked: Boolean,
     autoplayEnabled: Boolean,
@@ -128,27 +134,27 @@ private fun VideoPage(
                 )
             }
     ) {
-        val videoUrlToPlay by produceState<String?>(initialValue = null, key1 = uiModel.item.url, key2 = isActive) {
+        val videoUrlToPlay by produceState<String?>(initialValue = null, key1 = mediaItem.url, key2 = isActive) {
             if (isActive) {
-                if (uiModel.item.url.startsWith("vault://")) {
-                    value = viewModel.decryptMediaToCache(uiModel.item)
+                if (mediaItem.url.startsWith("vault://")) {
+                    value = viewModel.decryptMediaToCache(mediaItem)
                 } else {
-                    value = uiModel.item.url
+                    value = mediaItem.url
                 }
             } else {
                 value = null
             }
         }
 
-        if (videoUrlToPlay == null && uiModel.item.url.startsWith("vault://") && isActive) {
+        if (videoUrlToPlay == null && mediaItem.url.startsWith("vault://") && isActive) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         } else if (videoUrlToPlay != null) {
             VideoPlayer(
                 videoUrl = videoUrlToPlay!!,
-                videoWidth = uiModel.item.width,
-                videoHeight = uiModel.item.height,
+                videoWidth = mediaItem.width,
+                videoHeight = mediaItem.height,
                 autoplayEnabled = autoplayEnabled,
                 isActive = isActive,
                 isFullScreen = isFullScreen,

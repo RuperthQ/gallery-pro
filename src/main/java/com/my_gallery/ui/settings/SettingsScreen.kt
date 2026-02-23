@@ -35,6 +35,11 @@ fun SettingsScreen(
     val albumBehavior by galleryViewModel.albumBehavior.collectAsStateWithLifecycle()
     val themeColor by galleryViewModel.themeColor.collectAsStateWithLifecycle()
     val autoplayEnabled by galleryViewModel.autoplayEnabled.collectAsStateWithLifecycle()
+    val autoNavigateAfterMove by galleryViewModel.autoNavigateAfterMove.collectAsStateWithLifecycle()
+    val shortDateFilters by galleryViewModel.shortDateFilters.collectAsStateWithLifecycle()
+    val showFilterType by galleryViewModel.showFilterType.collectAsStateWithLifecycle()
+    val showFilterRes by galleryViewModel.showFilterRes.collectAsStateWithLifecycle()
+    val showFilterExt by galleryViewModel.showFilterExt.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -87,7 +92,25 @@ fun SettingsScreen(
                 onToggleAutoplay = { galleryViewModel.toggleAutoplay() }
             )
 
-            // 4. SECCIÓN: ACERCA DE
+            // 4. SECCIÓN: INTERACCIÓN
+            InteractionSection(
+                autoNavigateEnabled = autoNavigateAfterMove,
+                onToggleAutoNavigate = { galleryViewModel.toggleAutoNavigate() },
+                shortDateEnabled = shortDateFilters,
+                onToggleShortDate = { galleryViewModel.toggleShortDateFilters() }
+            )
+
+            // 5. SECCIÓN: FILTROS
+            FilterSettingsSection(
+                showType = showFilterType,
+                showRes = showFilterRes,
+                showExt = showFilterExt,
+                onToggleType = { galleryViewModel.toggleFilterType() },
+                onToggleRes = { galleryViewModel.toggleFilterRes() },
+                onToggleExt = { galleryViewModel.toggleFilterExt() }
+            )
+
+            // 6. SECCIÓN: ACERCA DE
             AboutSection()
             
             Spacer(modifier = Modifier.height(GalleryDesign.PaddingLarge))

@@ -36,7 +36,9 @@ data class MediaItem(
     @SerializedName("relativePath")
     val relativePath: String? = null,
     @SerializedName("rotation")
-    val rotation: Float = 0f
+    val rotation: Float = 0f,
+    @SerializedName("duration")
+    val duration: Long = 0
 )
 @Keep
 data class AlbumItem(

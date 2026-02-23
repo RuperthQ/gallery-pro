@@ -32,13 +32,13 @@ fun FilterRow(viewModel: GalleryViewModel) {
     ) {
         filters.forEach { filter ->
             val options by filter.getOptions()
-            val selectedOption by filter.getSelectedOption()
+            val selectedOptions by filter.getSelectedOptions()
 
             if (options.isNotEmpty()) {
                 FilterSection(
                     label = filter.title,
                     options = options,
-                    selectedOption = selectedOption,
+                    selectedOptions = selectedOptions,
                     onOptionSelected = { filter.onOptionSelected(it) }
                 )
             }
@@ -50,7 +50,7 @@ fun FilterRow(viewModel: GalleryViewModel) {
 fun FilterSection(
     label: String,
     options: List<String>,
-    selectedOption: String?,
+    selectedOptions: Set<String>,
     onOptionSelected: (String) -> Unit
 ) {
     Column(
@@ -85,7 +85,11 @@ fun FilterSection(
             items(options) { option ->
                 GalleryFilterChip(
                     label = option,
-                    isSelected = (option == selectedOption) || (option == "Todas" && selectedOption == null) || (option == "Todos" && (selectedOption == null || selectedOption == "Todos")), 
+                    isSelected = if (option == "Todas" || option == "Todos") {
+                        selectedOptions.isEmpty()
+                    } else {
+                        selectedOptions.contains(option)
+                    }, 
                     onClick = { onOptionSelected(option) }
                 )
             }

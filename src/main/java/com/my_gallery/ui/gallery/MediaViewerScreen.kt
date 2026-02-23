@@ -160,6 +160,8 @@ fun MediaViewerScreen(
         ViewerPager(
             items = items,
             pagerState = pagerState,
+            initialItem = item,
+            initialIndex = initialIndex,
             isLocked = isLocked,
             globalScale = globalScale,
             autoplayEnabled = autoplayEnabled,

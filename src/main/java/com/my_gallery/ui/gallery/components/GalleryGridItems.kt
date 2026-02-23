@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.my_gallery.data.local.dao.SectionMetadataRow
@@ -214,18 +215,18 @@ fun GalleryItem(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(GalleryDesign.PaddingSmall)
-                        .size(GalleryDesign.IconSizeLarge)
                         .background(
-                            Color.Black.copy(alpha = GalleryDesign.AlphaOverlay),
+                            Color.Black.copy(alpha = 0.6f),
                             GalleryDesign.OverlayShape
-                        ),
+                        )
+                        .padding(horizontal = GalleryDesign.PaddingSmall, vertical = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayCircle,
-                        contentDescription = "Video",
-                        modifier = Modifier.size(GalleryDesign.IconSizeSmall),
-                        tint = Color.White
+                    Text(
+                        text = com.my_gallery.ui.gallery.utils.FormatUtils.formatDuration(item.duration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }

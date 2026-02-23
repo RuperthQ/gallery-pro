@@ -38,6 +38,10 @@ class LocalMediaSyncHelper @Inject constructor(
                     mediaDao.clearBySource("LOCAL")
                 }
                 
+                val existingRotations = if (!force) {
+                    mediaDao.getRotationsBySource("LOCAL").associate { it.id to it.rotation }
+                } else emptyMap()
+
                 val mediaUris = listOf(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI to "img",
                     MediaStore.Video.Media.EXTERNAL_CONTENT_URI to "vid"
@@ -56,7 +60,8 @@ class LocalMediaSyncHelper @Inject constructor(
                         MediaStore.MediaColumns.WIDTH,
                         MediaStore.MediaColumns.HEIGHT,
                         MediaStore.MediaColumns.DATA,
-                        MediaStore.MediaColumns.BUCKET_ID
+                        MediaStore.MediaColumns.BUCKET_ID,
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.MediaColumns.DURATION else "duration"
                     )
                     
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -99,6 +104,7 @@ class LocalMediaSyncHelper @Inject constructor(
                         val dateAddedCol = it.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED)
                         val dateModCol = it.getColumnIndex(MediaStore.MediaColumns.DATE_MODIFIED)
                         val dateTakenCol = it.getColumnIndex(dateTakenKey)
+                        val durationCol = it.getColumnIndex(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.MediaColumns.DURATION else "duration")
                         val relPathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                             it.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
                         } else -1
@@ -152,7 +158,9 @@ class LocalMediaSyncHelper @Inject constructor(
                                     it.getString(relPathCol)
                                 } else {
                                     extractRelativePath(absolutePath)
-                                }
+                                },
+                                rotation = existingRotations["${typePrefix}_$id"] ?: 0f,
+                                duration = if (durationCol != -1) it.getLong(durationCol) else 0L
                             ))
                         }
                     }

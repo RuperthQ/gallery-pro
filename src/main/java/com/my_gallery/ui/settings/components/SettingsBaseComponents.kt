@@ -2,6 +2,7 @@ package com.my_gallery.ui.settings.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -17,13 +18,26 @@ import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 
 @Composable
 fun SettingsSectionTitle(title: String) {
-    Text(
-        text = title.uppercase(),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-    )
+    val isDark = isSystemInDarkTheme()
+    Row(
+        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (isDark) {
+            Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
+            HorizontalDivider(
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                thickness = 0.5.dp
+            )
+        }
+    }
 }
 
 @Composable
@@ -107,6 +121,7 @@ fun SettingsToggleRow(
 
 @Composable
 fun SettingsGroupLabel(label: String) {
+    val isDark = isSystemInDarkTheme()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -117,12 +132,12 @@ fun SettingsGroupLabel(label: String) {
             text = label.uppercase(),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+            color = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.9f else 0.8f)
         )
         Spacer(modifier = Modifier.width(GalleryDesign.PaddingSmall))
         HorizontalDivider(
             modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+            color = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.4f else 0.1f)
         )
     }
 }

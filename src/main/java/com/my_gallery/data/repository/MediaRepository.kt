@@ -67,23 +67,82 @@ class MediaRepository @Inject constructor(
         mediaDao.getMediaIdsByPeriod(source, period, mimeType, albumId)
     }
 
-    fun getPagedItems(
-        source: String, start: Long, end: Long, mimeType: String?,
-        albumId: String? = null, minWidth: Int = 0, minHeight: Int = 0
+    fun getPagedItemsMultiFilter(
+        source: String, 
+        periods: List<String>,
+        types: List<String>,
+        extensions: List<String>,
+        resolutions: List<String>,
+        albumId: String? = null
     ): PagingSource<Int, MediaEntity> =
-        mediaDao.pagingSourceAdvanced(source, start, end, formatMime(mimeType), albumId, minWidth, minHeight)
+        mediaDao.pagingSourceMultiFilter(
+            source = source,
+            useDateFilter = if (periods.isNotEmpty()) 1 else 0,
+            periods = periods,
+            useTypeFilter = if (types.isNotEmpty()) 1 else 0,
+            includeImages = if (types.contains("Imágenes")) 1 else 0,
+            includeVideos = if (types.contains("Videos")) 1 else 0,
+            useMimeFilter = if (extensions.isNotEmpty()) 1 else 0,
+            mimeTypes = extensions.map { formatMimeForIn(it) },
+            useResFilter = if (resolutions.isNotEmpty()) 1 else 0,
+            use4K = if (resolutions.contains("4K")) 1 else 0,
+            use2K = if (resolutions.contains("2K")) 1 else 0,
+            use1080P = if (resolutions.contains("1080P")) 1 else 0,
+            use720P = if (resolutions.contains("720P")) 1 else 0,
+            useSD = if (resolutions.contains("SD")) 1 else 0,
+            albumId = albumId
+        )
 
-    suspend fun getMediaIds(
-        source: String, start: Long, end: Long, mimeType: String?,
-        albumId: String? = null, minWidth: Int = 0, minHeight: Int = 0
-    ): List<String> =
-        mediaDao.getMediaIds(source, start, end, formatMime(mimeType), albumId, minWidth, minHeight)
+    fun getAllSectionsMetadataMultiFilter(
+        source: String, 
+        types: List<String>,
+        extensions: List<String>,
+        resolutions: List<String>,
+        albumId: String? = null
+    ): Flow<List<com.my_gallery.data.local.dao.SectionMetadataRow>> =
+        mediaDao.getAllSectionsMetadataMultiFilter(
+            source = source,
+            useTypeFilter = if (types.isNotEmpty()) 1 else 0,
+            includeImages = if (types.contains("Imágenes")) 1 else 0,
+            includeVideos = if (types.contains("Videos")) 1 else 0,
+            useMimeFilter = if (extensions.isNotEmpty()) 1 else 0,
+            mimeTypes = extensions.map { formatMimeForIn(it) },
+            useResFilter = if (resolutions.isNotEmpty()) 1 else 0,
+            use4K = if (resolutions.contains("4K")) 1 else 0,
+            use2K = if (resolutions.contains("2K")) 1 else 0,
+            use1080P = if (resolutions.contains("1080P")) 1 else 0,
+            use720P = if (resolutions.contains("720P")) 1 else 0,
+            useSD = if (resolutions.contains("SD")) 1 else 0,
+            albumId = albumId
+        )
 
-    suspend fun getMediaRank(
-        targetId: String, source: String, start: Long, end: Long, mimeType: String?,
-        albumId: String? = null, minWidth: Int = 0, minHeight: Int = 0
+    suspend fun getMediaRankMultiFilter(
+        targetId: String,
+        source: String, 
+        periods: List<String>,
+        types: List<String>,
+        extensions: List<String>,
+        resolutions: List<String>,
+        albumId: String? = null
     ): Int =
-        mediaDao.getMediaRank(targetId, source, start, end, formatMime(mimeType), albumId, minWidth, minHeight)
+        mediaDao.getMediaRankMultiFilter(
+            targetId = targetId,
+            source = source,
+            useDateFilter = if (periods.isNotEmpty()) 1 else 0,
+            periods = periods,
+            useTypeFilter = if (types.isNotEmpty()) 1 else 0,
+            includeImages = if (types.contains("Imágenes")) 1 else 0,
+            includeVideos = if (types.contains("Videos")) 1 else 0,
+            useMimeFilter = if (extensions.isNotEmpty()) 1 else 0,
+            mimeTypes = extensions.map { formatMimeForIn(it) },
+            useResFilter = if (resolutions.isNotEmpty()) 1 else 0,
+            use4K = if (resolutions.contains("4K")) 1 else 0,
+            use2K = if (resolutions.contains("2K")) 1 else 0,
+            use1080P = if (resolutions.contains("1080P")) 1 else 0,
+            use720P = if (resolutions.contains("720P")) 1 else 0,
+            useSD = if (resolutions.contains("SD")) 1 else 0,
+            albumId = albumId
+        )
 
     fun getDistinctMimeTypes(source: String): Flow<List<String>> = 
         mediaDao.getDistinctMimeTypes(source)
@@ -91,11 +150,40 @@ class MediaRepository @Inject constructor(
     fun getAvailableVideoResolutions(source: String) = 
         mediaDao.getDistinctVideoResolutions(source)
 
-    fun getAllSectionsMetadata(
-        source: String, mimeType: String?, albumId: String? = null,
-        minWidth: Int = 0, minHeight: Int = 0
-    ): Flow<List<com.my_gallery.data.local.dao.SectionMetadataRow>> =
-        mediaDao.getAllSectionsMetadata(source, formatMime(mimeType), albumId, minWidth, minHeight)
+    suspend fun getMediaIdsMultiFilter(
+        source: String, 
+        periods: List<String>,
+        types: List<String>,
+        extensions: List<String>,
+        resolutions: List<String>,
+        albumId: String? = null
+    ): List<String> =
+        mediaDao.getMediaIdsMultiFilter(
+            source = source,
+            useDateFilter = if (periods.isNotEmpty()) 1 else 0,
+            periods = periods,
+            useTypeFilter = if (types.isNotEmpty()) 1 else 0,
+            includeImages = if (types.contains("Imágenes")) 1 else 0,
+            includeVideos = if (types.contains("Videos")) 1 else 0,
+            useMimeFilter = if (extensions.isNotEmpty()) 1 else 0,
+            mimeTypes = extensions.map { formatMimeForIn(it) },
+            useResFilter = if (resolutions.isNotEmpty()) 1 else 0,
+            use4K = if (resolutions.contains("4K")) 1 else 0,
+            use2K = if (resolutions.contains("2K")) 1 else 0,
+            use1080P = if (resolutions.contains("1080P")) 1 else 0,
+            use720P = if (resolutions.contains("720P")) 1 else 0,
+            useSD = if (resolutions.contains("SD")) 1 else 0,
+            albumId = albumId
+        )
+
+    private fun formatMimeForIn(ext: String): String {
+        val videoExts = listOf("MP4", "MKV", "WEBM", "TS", "3GP", "MOV", "AVI")
+        return when {
+            ext.startsWith("image/") || ext.startsWith("video/") -> ext
+            videoExts.contains(ext.uppercase()) -> "video/${ext.lowercase()}"
+            else -> "image/${ext.lowercase()}"
+        }
+    }
 
     // --- OPERACIONES DE SINCRONIZACIÓN ---
 

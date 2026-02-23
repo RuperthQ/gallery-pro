@@ -42,6 +42,46 @@ class SettingsRepository @Inject constructor(
     private val _autoplayEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTOPLAY, true))
     val autoplayEnabled: StateFlow<Boolean> = _autoplayEnabled.asStateFlow()
 
+    private val _autoNavigateAfterMove = MutableStateFlow(prefs.getBoolean(KEY_AUTO_NAVIGATE, true))
+    val autoNavigateAfterMove: StateFlow<Boolean> = _autoNavigateAfterMove.asStateFlow()
+
+    private val _shortDateFilters = MutableStateFlow(prefs.getBoolean(KEY_SHORT_DATE_FILTERS, false))
+    val shortDateFilters: StateFlow<Boolean> = _shortDateFilters.asStateFlow()
+
+    private val _showFilterType = MutableStateFlow(prefs.getBoolean(KEY_SHOW_FILTER_TYPE, true))
+    val showFilterType: StateFlow<Boolean> = _showFilterType.asStateFlow()
+
+    private val _showFilterRes = MutableStateFlow(prefs.getBoolean(KEY_SHOW_FILTER_RES, false))
+    val showFilterRes: StateFlow<Boolean> = _showFilterRes.asStateFlow()
+
+    private val _showFilterExt = MutableStateFlow(prefs.getBoolean(KEY_SHOW_FILTER_EXT, false))
+    val showFilterExt: StateFlow<Boolean> = _showFilterExt.asStateFlow()
+
+    fun setShowFilterType(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SHOW_FILTER_TYPE, enabled).apply()
+        _showFilterType.value = enabled
+    }
+
+    fun setShowFilterRes(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SHOW_FILTER_RES, enabled).apply()
+        _showFilterRes.value = enabled
+    }
+
+    fun setShowFilterExt(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SHOW_FILTER_EXT, enabled).apply()
+        _showFilterExt.value = enabled
+    }
+
+    fun setShortDateFilters(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SHORT_DATE_FILTERS, enabled).apply()
+        _shortDateFilters.value = enabled
+    }
+
+    fun setAutoNavigateAfterMove(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_NAVIGATE, enabled).apply()
+        _autoNavigateAfterMove.value = enabled
+    }
+
     fun setAutoplayEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_AUTOPLAY, enabled).apply()
         _autoplayEnabled.value = enabled
@@ -79,5 +119,10 @@ class SettingsRepository @Inject constructor(
         private const val KEY_ALBUM_BEHAVIOR = "KEY_ALBUM_BEHAVIOR"
         private const val KEY_THEME_COLOR = "KEY_THEME_COLOR"
         private const val KEY_AUTOPLAY = "KEY_AUTOPLAY"
+        private const val KEY_AUTO_NAVIGATE = "KEY_AUTO_NAVIGATE"
+        private const val KEY_SHORT_DATE_FILTERS = "KEY_SHORT_DATE_FILTERS"
+        private const val KEY_SHOW_FILTER_TYPE = "KEY_SHOW_FILTER_TYPE"
+        private const val KEY_SHOW_FILTER_RES = "KEY_SHOW_FILTER_RES"
+        private const val KEY_SHOW_FILTER_EXT = "KEY_SHOW_FILTER_EXT"
     }
 }

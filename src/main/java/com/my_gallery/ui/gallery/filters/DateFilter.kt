@@ -12,7 +12,7 @@ class DateFilter(private val viewModel: GalleryViewModel) : GalleryFilter {
     override fun getOptions(): State<List<String>> = viewModel.availableFilters.collectAsStateWithLifecycle()
 
     @Composable
-    override fun getSelectedOption(): State<String?> = viewModel.selectedFilter.collectAsStateWithLifecycle()
+    override fun getSelectedOptions(): State<Set<String>> = viewModel.selectedFilters.collectAsStateWithLifecycle()
 
     override fun onOptionSelected(option: String) {
         viewModel.onFilterSelected(option)

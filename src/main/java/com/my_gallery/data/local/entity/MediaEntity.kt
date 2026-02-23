@@ -22,7 +22,8 @@ data class MediaEntity(
     val albumId: String? = null,
     val originalAlbumId: String? = null,
     val relativePath: String? = null,
-    val rotation: Float = 0f
+    val rotation: Float = 0f,
+    val duration: Long = 0
 ) {
     fun toDomain() = MediaItem(
         id = id,
@@ -39,7 +40,8 @@ data class MediaEntity(
         albumId = albumId,
         originalAlbumId = originalAlbumId,
         relativePath = relativePath,
-        rotation = rotation
+        rotation = rotation,
+        duration = duration
     )
 
     companion object {
@@ -58,7 +60,8 @@ data class MediaEntity(
             albumId = domain.albumId,
             originalAlbumId = domain.originalAlbumId,
             relativePath = domain.relativePath,
-            rotation = domain.rotation
+            rotation = domain.rotation,
+            duration = domain.duration
         )
     }
 }

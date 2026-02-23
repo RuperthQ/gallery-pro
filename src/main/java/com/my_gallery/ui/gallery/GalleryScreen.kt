@@ -149,6 +149,13 @@ fun GalleryScreen(
         )
 
         // --- BACK HANDLERS ---
-        setupGalleryBackHandlers(viewModel, uiState.isSelectionMode, uiState.showSettings, viewerItem)
+        setupGalleryBackHandlers(
+            viewModel = viewModel,
+            isSelectionMode = uiState.isSelectionMode,
+            showSettings = uiState.showSettings,
+            showTrash = uiState.showTrash,
+            selectedAlbumId = selectedAlbum,
+            viewerItem = viewerItem
+        )
     }
 }

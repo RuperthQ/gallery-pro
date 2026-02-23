@@ -57,8 +57,38 @@ class SettingsRepository @Inject constructor(
     private val _showFilterExt = MutableStateFlow(prefs.getBoolean(KEY_SHOW_FILTER_EXT, false))
     val showFilterExt: StateFlow<Boolean> = _showFilterExt.asStateFlow()
 
+    private val _showVaultInCarousel = MutableStateFlow(prefs.getBoolean(KEY_SHOW_VAULT_IN_CAROUSEL, true))
+    val showVaultInCarousel: StateFlow<Boolean> = _showVaultInCarousel.asStateFlow()
+
+    private val _lockSettingsScreen = MutableStateFlow(prefs.getBoolean(KEY_LOCK_SETTINGS_SCREEN, false))
+    val lockSettingsScreen: StateFlow<Boolean> = _lockSettingsScreen.asStateFlow()
+
     private val _startInLastAlbum = MutableStateFlow(prefs.getBoolean(KEY_START_LAST_ALBUM, false))
     val startInLastAlbum: StateFlow<Boolean> = _startInLastAlbum.asStateFlow()
+
+    private val _floatingMenuCreateVisible = MutableStateFlow(prefs.getBoolean(KEY_FM_CREATE, true))
+    val floatingMenuCreateVisible: StateFlow<Boolean> = _floatingMenuCreateVisible.asStateFlow()
+
+    private val _floatingMenuFilterVisible = MutableStateFlow(prefs.getBoolean(KEY_FM_FILTER, true))
+    val floatingMenuFilterVisible: StateFlow<Boolean> = _floatingMenuFilterVisible.asStateFlow()
+
+    private val _floatingMenuSelectVisible = MutableStateFlow(prefs.getBoolean(KEY_FM_SELECT, true))
+    val floatingMenuSelectVisible: StateFlow<Boolean> = _floatingMenuSelectVisible.asStateFlow()
+
+    private val _topMenuCreateVisible = MutableStateFlow(prefs.getBoolean(KEY_TM_CREATE, true))
+    val topMenuCreateVisible: StateFlow<Boolean> = _topMenuCreateVisible.asStateFlow()
+
+    private val _topMenuGridVisible = MutableStateFlow(prefs.getBoolean(KEY_TM_GRID, true))
+    val topMenuGridVisible: StateFlow<Boolean> = _topMenuGridVisible.asStateFlow()
+
+    private val _topMenuFilterVisible = MutableStateFlow(prefs.getBoolean(KEY_TM_FILTER, true))
+    val topMenuFilterVisible: StateFlow<Boolean> = _topMenuFilterVisible.asStateFlow()
+
+    private val _topMenuEmptyVisible = MutableStateFlow(prefs.getBoolean(KEY_TM_EMPTY, false))
+    val topMenuEmptyVisible: StateFlow<Boolean> = _topMenuEmptyVisible.asStateFlow()
+
+    private val _topMenuSelectVisible = MutableStateFlow(prefs.getBoolean(KEY_TM_SELECT, true))
+    val topMenuSelectVisible: StateFlow<Boolean> = _topMenuSelectVisible.asStateFlow()
 
     private val _lastVisitedAlbum = MutableStateFlow(prefs.getString(KEY_LAST_VISITED_ALBUM, null))
     val lastVisitedAlbum: StateFlow<String?> = _lastVisitedAlbum.asStateFlow()
@@ -98,6 +128,46 @@ class SettingsRepository @Inject constructor(
         _autoNavigateAfterMove.value = enabled
     }
 
+    fun setFloatingMenuCreateVisible(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_FM_CREATE, enabled).apply()
+        _floatingMenuCreateVisible.value = enabled
+    }
+
+    fun setFloatingMenuFilterVisible(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_FM_FILTER, enabled).apply()
+        _floatingMenuFilterVisible.value = enabled
+    }
+
+    fun setFloatingMenuSelectVisible(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_FM_SELECT, enabled).apply()
+        _floatingMenuSelectVisible.value = enabled
+    }
+
+    fun setTopMenuCreateVisible(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TM_CREATE, enabled).apply()
+        _topMenuCreateVisible.value = enabled
+    }
+
+    fun setTopMenuGridVisible(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TM_GRID, enabled).apply()
+        _topMenuGridVisible.value = enabled
+    }
+
+    fun setTopMenuFilterVisible(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TM_FILTER, enabled).apply()
+        _topMenuFilterVisible.value = enabled
+    }
+
+    fun setTopMenuEmptyVisible(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TM_EMPTY, enabled).apply()
+        _topMenuEmptyVisible.value = enabled
+    }
+
+    fun setTopMenuSelectVisible(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TM_SELECT, enabled).apply()
+        _topMenuSelectVisible.value = enabled
+    }
+
     fun setAutoplayEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_AUTOPLAY, enabled).apply()
         _autoplayEnabled.value = enabled
@@ -128,6 +198,16 @@ class SettingsRepository @Inject constructor(
         _showEmptyAlbums.value = show
     }
 
+    fun setShowVaultInCarousel(show: Boolean) {
+        prefs.edit().putBoolean(KEY_SHOW_VAULT_IN_CAROUSEL, show).apply()
+        _showVaultInCarousel.value = show
+    }
+
+    fun setLockSettingsScreen(lock: Boolean) {
+        prefs.edit().putBoolean(KEY_LOCK_SETTINGS_SCREEN, lock).apply()
+        _lockSettingsScreen.value = lock
+    }
+
     companion object {
         private const val KEY_MENU_STYLE = "KEY_MENU_STYLE"
         private const val KEY_COLUMN_COUNT = "KEY_COLUMN_COUNT"
@@ -142,5 +222,16 @@ class SettingsRepository @Inject constructor(
         private const val KEY_SHOW_FILTER_EXT = "KEY_SHOW_FILTER_EXT"
         private const val KEY_START_LAST_ALBUM = "KEY_START_LAST_ALBUM"
         private const val KEY_LAST_VISITED_ALBUM = "KEY_LAST_VISITED_ALBUM"
+        private const val KEY_FM_CREATE = "KEY_FM_CREATE"
+        private const val KEY_FM_FILTER = "KEY_FM_FILTER"
+        private const val KEY_FM_SELECT = "KEY_FM_SELECT"
+
+        private const val KEY_TM_CREATE = "KEY_TM_CREATE"
+        private const val KEY_TM_GRID = "KEY_TM_GRID"
+        private const val KEY_TM_FILTER = "KEY_TM_FILTER"
+        private const val KEY_TM_EMPTY = "KEY_TM_EMPTY"
+        private const val KEY_TM_SELECT = "KEY_TM_SELECT"
+        private const val KEY_SHOW_VAULT_IN_CAROUSEL = "KEY_SHOW_VAULT_IN_CAROUSEL"
+        private const val KEY_LOCK_SETTINGS_SCREEN = "KEY_LOCK_SETTINGS_SCREEN"
     }
 }

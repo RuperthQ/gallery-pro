@@ -6,7 +6,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.my_gallery.ui.gallery.AlbumBehavior
@@ -114,7 +117,11 @@ fun PersonalizationSection(
 @Composable
 fun SecuritySection(
     isAppLocked: Boolean,
+    lockSettingsScreen: Boolean,
+    showVaultInCarousel: Boolean,
     onToggleAppLock: (Boolean) -> Unit,
+    onToggleLockSettings: (Boolean) -> Unit,
+    onToggleVaultInCarousel: (Boolean) -> Unit,
     onManageVault: () -> Unit
 ) {
     Column {
@@ -129,10 +136,26 @@ fun SecuritySection(
                     onCheckedChange = onToggleAppLock
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsToggleRow(
+                    title = "Bloqueo de Ajustes",
+                    description = "Requiere biometría para entrar a esta pantalla de configuración.",
+                    icon = Icons.Default.Settings,
+                    checked = lockSettingsScreen,
+                    onCheckedChange = onToggleLockSettings
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsToggleRow(
+                    title = "Mostrar Bóveda en Carrusel",
+                    description = "Muestra el acceso directo a la bóveda en la lista de álbumes principal.",
+                    icon = Icons.Default.Visibility,
+                    checked = showVaultInCarousel,
+                    onCheckedChange = onToggleVaultInCarousel
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
                 SettingsOptionRow(
                     title = "Bóveda Privada",
                     description = "Administra tus archivos cifrados.",
-                    icon = Icons.Default.EnhancedEncryption,
+                    icon = Icons.Default.Lock,
                     onClick = onManageVault
                 ) {
                     Icon(Icons.Default.ChevronRight, contentDescription = null)
@@ -256,16 +279,120 @@ fun FilterSettingsSection(
 }
 
 @Composable
+fun FloatingMenuSettingsSection(
+    createVisible: Boolean,
+    filterVisible: Boolean,
+    selectVisible: Boolean,
+    onToggleCreate: (Boolean) -> Unit,
+    onToggleFilter: (Boolean) -> Unit,
+    onToggleSelect: (Boolean) -> Unit
+) {
+    Column {
+        SettingsSectionTitle("Acciones del Menú Flotante")
+        SettingsCard {
+            Column {
+                SettingsToggleRow(
+                    title = "Acción Crear",
+                    description = "Mostrar el botón de crear álbum en la barra principal.",
+                    icon = Icons.Default.LibraryAdd,
+                    checked = createVisible,
+                    onCheckedChange = onToggleCreate
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsToggleRow(
+                    title = "Acción Filtrar",
+                    description = "Mostrar el botón de filtros en la barra principal.",
+                    icon = Icons.Default.FilterList,
+                    checked = filterVisible,
+                    onCheckedChange = onToggleFilter
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsToggleRow(
+                    title = "Acción Seleccionar",
+                    description = "Mostrar el botón de selección múltiple en la barra principal.",
+                    icon = Icons.Default.CheckCircle,
+                    checked = selectVisible,
+                    onCheckedChange = onToggleSelect
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TopMenuSettingsSection(
+    createVisible: Boolean,
+    gridVisible: Boolean,
+    filterVisible: Boolean,
+    emptyVisible: Boolean,
+    selectVisible: Boolean,
+    onToggleCreate: (Boolean) -> Unit,
+    onToggleGrid: (Boolean) -> Unit,
+    onToggleFilter: (Boolean) -> Unit,
+    onToggleEmpty: (Boolean) -> Unit,
+    onToggleSelect: (Boolean) -> Unit
+) {
+    Column {
+        SettingsSectionTitle("Acciones del Menú Superior")
+        SettingsCard {
+            Column {
+                SettingsToggleRow(
+                    title = "Acción Crear",
+                    description = "Mostrar el botón de crear álbum en la barra superior.",
+                    icon = Icons.Default.LibraryAdd,
+                    checked = createVisible,
+                    onCheckedChange = onToggleCreate
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsToggleRow(
+                    title = "Acción Grid",
+                    description = "Mostrar el botón para cambiar el tamaño del grid.",
+                    icon = Icons.Default.GridView,
+                    checked = gridVisible,
+                    onCheckedChange = onToggleGrid
+                )
+                SettingsToggleRow(
+                    title = "Acción Mostrar Vacíos",
+                    description = "Mostrar el botón de álbumes vacíos.",
+                    icon = Icons.Default.FolderOpen,
+                    checked = emptyVisible,
+                    onCheckedChange = onToggleEmpty
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsToggleRow(
+                    title = "Acción Seleccionar",
+                    description = "Mostrar el botón de selección múltiple.",
+                    icon = Icons.Default.CheckCircle,
+                    checked = selectVisible,
+                    onCheckedChange = onToggleSelect
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun AboutSection() {
+    val context = LocalContext.current
+    val versionName = remember {
+        try {
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            packageInfo.versionName ?: "Desconocida"
+        } catch (e: Exception) {
+            "Desconocida"
+        }
+    }
+
     Column {
         SettingsSectionTitle("Acerca de")
         SettingsCard {
             SettingsOptionRow(
                 title = "Galería Pro",
-                description = "Versión 1.0.0 - Diseño Premium",
+                description = "Versión $versionName",
                 icon = Icons.Default.Info
             ) {
-                Text("Premium", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                // Comentado para futuras funciones de pago
+                // Text("Premium", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         }
     }

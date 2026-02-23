@@ -11,10 +11,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalContext
+import androidx.fragment.app.FragmentActivity
+import com.my_gallery.ui.security.BiometricPromptManager
 import com.my_gallery.ui.gallery.GalleryViewModel
+import com.my_gallery.ui.gallery.MenuStyle
 import com.my_gallery.ui.security.SecurityViewModel
 import com.my_gallery.ui.settings.components.*
 import com.my_gallery.ui.theme.GalleryDesign
+import com.my_gallery.ui.components.PremiumAlertDialog
 
 /**
  * Pantalla de Ajustes Orquestadora.
@@ -41,6 +46,65 @@ fun SettingsScreen(
     val showFilterType by galleryViewModel.showFilterType.collectAsStateWithLifecycle()
     val showFilterRes by galleryViewModel.showFilterRes.collectAsStateWithLifecycle()
     val showFilterExt by galleryViewModel.showFilterExt.collectAsStateWithLifecycle()
+
+    val showVaultInCarousel by galleryViewModel.showVaultInCarousel.collectAsStateWithLifecycle()
+    val lockSettingsScreen by galleryViewModel.lockSettingsScreen.collectAsStateWithLifecycle()
+
+    val fmCreateVisible by galleryViewModel.floatingMenuCreateVisible.collectAsStateWithLifecycle()
+    val fmFilterVisible by galleryViewModel.floatingMenuFilterVisible.collectAsStateWithLifecycle()
+    val fmSelectVisible by galleryViewModel.floatingMenuSelectVisible.collectAsStateWithLifecycle()
+
+    val tmCreateVisible by galleryViewModel.topMenuCreateVisible.collectAsStateWithLifecycle()
+    val tmGridVisible by galleryViewModel.topMenuGridVisible.collectAsStateWithLifecycle()
+    val tmFilterVisible by galleryViewModel.topMenuFilterVisible.collectAsStateWithLifecycle()
+    val tmEmptyVisible by galleryViewModel.topMenuEmptyVisible.collectAsStateWithLifecycle()
+    val tmSelectVisible by galleryViewModel.topMenuSelectVisible.collectAsStateWithLifecycle()
+
+    var isSettingsAuthSuccess by remember { mutableStateOf(false) }
+    var showEmptyVaultAlert by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    LaunchedEffect(lockSettingsScreen) {
+        if (lockSettingsScreen && !isSettingsAuthSuccess) {
+            val biom = (context as? FragmentActivity)?.let { BiometricPromptManager(it) }
+            if (biom?.canAuthenticate() == true) {
+                biom.authenticate(
+                    title = "Acceso a Ajustes",
+                    subtitle = "Autorización requerida",
+                    onSuccess = { isSettingsAuthSuccess = true },
+                    onError = { onBack() }
+                )
+            } else {
+                isSettingsAuthSuccess = true
+            }
+        } else {
+            isSettingsAuthSuccess = true
+        }
+    }
+
+    if (!isSettingsAuthSuccess && lockSettingsScreen) {
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+        return
+    }
+
+    if (showEmptyVaultAlert) {
+        PremiumAlertDialog(
+            onDismissRequest = { showEmptyVaultAlert = false },
+            title = "Bóveda vacía",
+            text = {
+                Text(
+                    "Aún no tiene elementos guardados allí",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showEmptyVaultAlert = false }) {
+                    Text("Aceptar", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = null
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -80,20 +144,56 @@ fun SettingsScreen(
                 onToggleEmptyAlbums = { galleryViewModel.toggleShowEmptyAlbums() }
             )
 
-            // 2. SECCIÓN: SEGURIDAD
+            // 2. SECCIÓN: MENÚ FLOTANTE (Solo si estilo flotante está seleccionado)
+            if (menuStyle == MenuStyle.BOTTOM_FLOATING) {
+                FloatingMenuSettingsSection(
+                    createVisible = fmCreateVisible,
+                    filterVisible = fmFilterVisible,
+                    selectVisible = fmSelectVisible,
+                    onToggleCreate = { galleryViewModel.toggleFloatingMenuCreate() },
+                    onToggleFilter = { galleryViewModel.toggleFloatingMenuFilter() },
+                    onToggleSelect = { galleryViewModel.toggleFloatingMenuSelect() }
+                )
+            }
+
+            if (menuStyle == MenuStyle.TOP_HEADER) {
+                TopMenuSettingsSection(
+                    createVisible = tmCreateVisible,
+                    gridVisible = tmGridVisible,
+                    filterVisible = tmFilterVisible,
+                    emptyVisible = tmEmptyVisible,
+                    selectVisible = tmSelectVisible,
+                    onToggleCreate = { galleryViewModel.toggleTopMenuCreate() },
+                    onToggleGrid = { galleryViewModel.toggleTopMenuGrid() },
+                    onToggleFilter = { galleryViewModel.toggleTopMenuFilter() },
+                    onToggleEmpty = { galleryViewModel.toggleTopMenuEmpty() },
+                    onToggleSelect = { galleryViewModel.toggleTopMenuSelect() }
+                )
+            }
+
+            // 3. SECCIÓN: SEGURIDAD
             SecuritySection(
                 isAppLocked = isAppLocked,
+                lockSettingsScreen = lockSettingsScreen,
+                showVaultInCarousel = showVaultInCarousel,
                 onToggleAppLock = { securityViewModel.toggleAppLock(it) },
-                onManageVault = { /* TODO: Navegar a gestión de bóveda */ }
+                onToggleLockSettings = { galleryViewModel.toggleLockSettingsScreen() },
+                onToggleVaultInCarousel = { galleryViewModel.toggleShowVaultInCarousel() },
+                onManageVault = { 
+                    galleryViewModel.checkAndOpenVault(
+                        onEmpty = { showEmptyVaultAlert = true },
+                        onOpen = { onBack() }
+                    )
+                }
             )
 
-            // 3. SECCIÓN: REPRODUCTOR
+            // 4. SECCIÓN: REPRODUCTOR
             PlayerSection(
                 autoplayEnabled = autoplayEnabled,
                 onToggleAutoplay = { galleryViewModel.toggleAutoplay() }
             )
 
-            // 4. SECCIÓN: INTERACCIÓN
+            // 5. SECCIÓN: INTERACCIÓN
             InteractionSection(
                 autoNavigateEnabled = autoNavigateAfterMove,
                 onToggleAutoNavigate = { galleryViewModel.toggleAutoNavigate() },
@@ -103,7 +203,7 @@ fun SettingsScreen(
                 onToggleStartInLastAlbum = { galleryViewModel.toggleStartInLastAlbum() }
             )
 
-            // 5. SECCIÓN: FILTROS
+            // 6. SECCIÓN: FILTROS
             FilterSettingsSection(
                 showType = showFilterType,
                 showRes = showFilterRes,
@@ -113,7 +213,7 @@ fun SettingsScreen(
                 onToggleExt = { galleryViewModel.toggleFilterExt() }
             )
 
-            // 6. SECCIÓN: ACERCA DE
+            // 7. SECCIÓN: ACERCA DE
             AboutSection()
             
             Spacer(modifier = Modifier.height(GalleryDesign.PaddingLarge))

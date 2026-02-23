@@ -72,7 +72,7 @@ fun SettingsOptionRow(
                         .clip(GalleryDesign.CardShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f))
                         .clickable(onClick = onClick)
-                        .padding(GalleryDesign.PaddingSmall)
+//                        .padding(GalleryDesign.PaddingSmall)
                 } else Modifier
             ),
         verticalAlignment = Alignment.CenterVertically

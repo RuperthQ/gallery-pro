@@ -19,7 +19,10 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -41,6 +44,7 @@ import com.my_gallery.ui.gallery.MenuStyle
 import com.my_gallery.ui.security.SecurityViewModel
 import com.my_gallery.ui.theme.GalleryDesign
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GalleryMainGrid(
     items: LazyPagingItems<GalleryUiModel>,
@@ -63,8 +67,17 @@ fun GalleryMainGrid(
     val animatedColumns by animateIntAsState(targetValue = columnCount, label = "columnAnim")
     val context = androidx.compose.ui.platform.LocalContext.current
     val gridState = rememberLazyGridState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isRefreshing = uiState.isForceSyncing
+    val pullToRefreshState = rememberPullToRefreshState()
     
-    Box(modifier = modifier.fillMaxSize()) {
+    @OptIn(ExperimentalMaterial3Api::class)
+    PullToRefreshBox(
+        state = pullToRefreshState,
+        isRefreshing = isRefreshing,
+        onRefresh = { viewModel.forceSyncGallery() },
+        modifier = modifier.fillMaxSize()
+    ) {
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(animatedColumns),

@@ -54,6 +54,18 @@ class GalleryViewModel @Inject constructor(
         settingsRepository.setLastVisitedAlbum(_selectedAlbum.value)
     }
 
+    fun checkAndOpenVault(onEmpty: () -> Unit, onOpen: () -> Unit) {
+        viewModelScope.launch {
+            val count = albumUseCases.getSecureVaultCount()
+            if (count > 0) {
+                toggleAlbum("SECURE_VAULT")
+                onOpen()
+            } else {
+                onEmpty()
+            }
+        }
+    }
+
     val columnCount: StateFlow<Int> = settingsRepository.columnCount
 
     val albumBehavior: StateFlow<AlbumBehavior> = settingsRepository.albumBehavior
@@ -160,6 +172,42 @@ class GalleryViewModel @Inject constructor(
     fun toggleStartInLastAlbum() {
         settingsUseCases.updateSettings.setStartInLastAlbum(!startInLastAlbum.value)
     }
+
+    val showVaultInCarousel: StateFlow<Boolean> = settingsRepository.showVaultInCarousel
+
+    fun toggleShowVaultInCarousel() {
+        settingsUseCases.updateSettings.setShowVaultInCarousel(!showVaultInCarousel.value)
+    }
+
+    val lockSettingsScreen: StateFlow<Boolean> = settingsRepository.lockSettingsScreen
+
+    fun toggleLockSettingsScreen() {
+        settingsUseCases.updateSettings.setLockSettingsScreen(!lockSettingsScreen.value)
+    }
+
+    val floatingMenuCreateVisible: StateFlow<Boolean> = settingsRepository.floatingMenuCreateVisible
+    fun toggleFloatingMenuCreate() = settingsUseCases.updateSettings.setFloatingMenuCreateVisible(!floatingMenuCreateVisible.value)
+
+    val floatingMenuFilterVisible: StateFlow<Boolean> = settingsRepository.floatingMenuFilterVisible
+    fun toggleFloatingMenuFilter() = settingsUseCases.updateSettings.setFloatingMenuFilterVisible(!floatingMenuFilterVisible.value)
+
+    val floatingMenuSelectVisible: StateFlow<Boolean> = settingsRepository.floatingMenuSelectVisible
+    fun toggleFloatingMenuSelect() = settingsUseCases.updateSettings.setFloatingMenuSelectVisible(!floatingMenuSelectVisible.value)
+
+    val topMenuCreateVisible: StateFlow<Boolean> = settingsRepository.topMenuCreateVisible
+    fun toggleTopMenuCreate() = settingsUseCases.updateSettings.setTopMenuCreateVisible(!topMenuCreateVisible.value)
+
+    val topMenuGridVisible: StateFlow<Boolean> = settingsRepository.topMenuGridVisible
+    fun toggleTopMenuGrid() = settingsUseCases.updateSettings.setTopMenuGridVisible(!topMenuGridVisible.value)
+
+    val topMenuFilterVisible: StateFlow<Boolean> = settingsRepository.topMenuFilterVisible
+    fun toggleTopMenuFilter() = settingsUseCases.updateSettings.setTopMenuFilterVisible(!topMenuFilterVisible.value)
+
+    val topMenuEmptyVisible: StateFlow<Boolean> = settingsRepository.topMenuEmptyVisible
+    fun toggleTopMenuEmpty() = settingsUseCases.updateSettings.setTopMenuEmptyVisible(!topMenuEmptyVisible.value)
+
+    val topMenuSelectVisible: StateFlow<Boolean> = settingsRepository.topMenuSelectVisible
+    fun toggleTopMenuSelect() = settingsUseCases.updateSettings.setTopMenuSelectVisible(!topMenuSelectVisible.value)
 
     val showFilterType: StateFlow<Boolean> = settingsRepository.showFilterType
     val showFilterRes: StateFlow<Boolean> = settingsRepository.showFilterRes

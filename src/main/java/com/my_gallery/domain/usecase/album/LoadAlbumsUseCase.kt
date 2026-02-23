@@ -2,6 +2,7 @@ package com.my_gallery.domain.usecase.album
 
 import com.my_gallery.data.repository.MediaRepository
 import com.my_gallery.data.repository.SecurityRepository
+import com.my_gallery.data.repository.SettingsRepository
 import com.my_gallery.domain.model.AlbumItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -9,7 +10,8 @@ import javax.inject.Inject
 
 class LoadAlbumsUseCase @Inject constructor(
     private val repository: MediaRepository,
-    private val securityRepository: SecurityRepository
+    private val securityRepository: SecurityRepository,
+    private val settingsRepository: SettingsRepository
 ) {
     operator fun invoke(showEmpty: Boolean): Flow<List<AlbumItem>> {
         return combine(
@@ -17,8 +19,9 @@ class LoadAlbumsUseCase @Inject constructor(
             securityRepository.isDecoyMode,
             securityRepository.lockedAlbums,
             repository.getFavoritesCountFlow(),
-            repository.getFavoritesThumbnailFlow()
-        ) { list, isDecoy, locked, favCount, favThumb ->
+            combine(repository.getFavoritesThumbnailFlow(), settingsRepository.showVaultInCarousel, ::Pair)
+        ) { list, isDecoy, locked, favCount, pair ->
+            val (favThumb, showVaultInCarousel) = pair
             val filteredList = if (isDecoy) {
                 list.filter { it.id !in locked }
             } else list
@@ -45,7 +48,7 @@ class LoadAlbumsUseCase @Inject constructor(
             }
             
             val vaultCount = if (isDecoy) 0 else repository.getSecureVaultCount()
-            if (vaultCount > 0) {
+            if (vaultCount > 0 && showVaultInCarousel) {
                 virtualAlbums.add(AlbumItem(
                     id = "SECURE_VAULT",
                     name = "Bóveda Segura",

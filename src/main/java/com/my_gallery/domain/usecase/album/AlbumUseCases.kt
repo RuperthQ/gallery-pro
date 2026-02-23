@@ -7,5 +7,6 @@ data class AlbumUseCases @Inject constructor(
     val loadAlbums: LoadAlbumsUseCase,
     val createAlbum: CreateAlbumUseCase,
     val prepareTempAlbum: PrepareTempAlbumUseCase,
-    val deleteAlbum: DeleteAlbumUseCase
+    val deleteAlbum: DeleteAlbumUseCase,
+    val getSecureVaultCount: GetSecureVaultCountUseCase
 )

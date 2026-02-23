@@ -1,7 +1,7 @@
 package com.my_gallery.ui.gallery.header_actions
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FolderSpecial
+import androidx.compose.material.icons.filled.FolderOpen
 import com.my_gallery.ui.gallery.GalleryViewModel
 
 class ToggleEmptyAlbumsAction(
@@ -10,7 +10,7 @@ class ToggleEmptyAlbumsAction(
 ) {
     operator fun invoke(): HeaderAction {
         return HeaderAction(
-            icon = Icons.Default.FolderSpecial,
+            icon = Icons.Default.FolderOpen,
             description = "Álbumes Vacíos",
             onClick = { viewModel.toggleShowEmptyAlbums() },
             isSelected = isEnabled

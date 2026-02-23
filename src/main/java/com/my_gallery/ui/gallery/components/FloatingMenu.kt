@@ -76,6 +76,10 @@ fun FloatingGalleryMenu(
     val orchestrator = remember(viewModel) { HeaderActionsOrchestrator(viewModel) }
     var extraExpanded by remember { mutableStateOf(false) }
 
+    val fmCreateVisible by viewModel.floatingMenuCreateVisible.collectAsStateWithLifecycle()
+    val fmFilterVisible by viewModel.floatingMenuFilterVisible.collectAsStateWithLifecycle()
+    val fmSelectVisible by viewModel.floatingMenuSelectVisible.collectAsStateWithLifecycle()
+
     // Autocerrar el submenú cuando se entra a los ajustes, a selección, o se abren los filtros
     LaunchedEffect(uiState.showSettings, uiState.isSelectionMode, uiState.showFilters) {
         if (uiState.showSettings || uiState.isSelectionMode || uiState.showFilters) {
@@ -154,6 +158,10 @@ fun FloatingGalleryMenu(
                         modifier = Modifier.padding(GalleryDesign.PaddingSmall),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
+                        if (!fmCreateVisible) FloatingMenuLabeledRow(CreateAlbumAction(viewModel)())
+                        if (!fmFilterVisible) FloatingMenuLabeledRow(ToggleFilterAction(viewModel, uiState.showFilters)())
+                        if (!fmSelectVisible) FloatingMenuLabeledRow(ToggleSelectionAction(viewModel)())
+
                         FloatingMenuLabeledRow(
                             action = RefreshGalleryAction(viewModel)(),
                             isSyncing = uiState.isForceSyncing
@@ -258,9 +266,9 @@ fun FloatingGalleryMenu(
                                 tint = MaterialTheme.colorScheme.error
                             )
                         } else {
-                            FloatingMenuButton(CreateAlbumAction(viewModel)())
-                            FloatingMenuButton(ToggleFilterAction(viewModel, uiState.showFilters)())
-                            FloatingMenuButton(ToggleSelectionAction(viewModel)())
+                            if (fmCreateVisible) FloatingMenuButton(CreateAlbumAction(viewModel)())
+                            if (fmFilterVisible) FloatingMenuButton(ToggleFilterAction(viewModel, uiState.showFilters)())
+                            if (fmSelectVisible) FloatingMenuButton(ToggleSelectionAction(viewModel)())
                         }
                     }
                 }

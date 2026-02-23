@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Videocam
@@ -78,12 +80,12 @@ fun ActiveFilterPills(
 
             // Filtros de extensión
             selectedExtensions.forEach { ext ->
-                add(FilterPillData(ext, Icons.Default.Image) { viewModel.onExtensionFilterSelected(ext) })
+                add(FilterPillData(ext, Icons.Default.Extension) { viewModel.onExtensionFilterSelected(ext) })
             }
 
             // Filtros de video (Resolución)
             selectedResolutions.forEach { res ->
-                add(FilterPillData(res, Icons.Default.Videocam) { viewModel.onResolutionFilterSelected(res) })
+                add(FilterPillData(res, Icons.Default.AspectRatio) { viewModel.onResolutionFilterSelected(res) })
             }
 
             // Filtro de álbum

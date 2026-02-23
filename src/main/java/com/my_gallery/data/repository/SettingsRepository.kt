@@ -57,6 +57,22 @@ class SettingsRepository @Inject constructor(
     private val _showFilterExt = MutableStateFlow(prefs.getBoolean(KEY_SHOW_FILTER_EXT, false))
     val showFilterExt: StateFlow<Boolean> = _showFilterExt.asStateFlow()
 
+    private val _startInLastAlbum = MutableStateFlow(prefs.getBoolean(KEY_START_LAST_ALBUM, false))
+    val startInLastAlbum: StateFlow<Boolean> = _startInLastAlbum.asStateFlow()
+
+    private val _lastVisitedAlbum = MutableStateFlow(prefs.getString(KEY_LAST_VISITED_ALBUM, null))
+    val lastVisitedAlbum: StateFlow<String?> = _lastVisitedAlbum.asStateFlow()
+
+    fun setStartInLastAlbum(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_START_LAST_ALBUM, enabled).apply()
+        _startInLastAlbum.value = enabled
+    }
+
+    fun setLastVisitedAlbum(albumId: String?) {
+        prefs.edit().putString(KEY_LAST_VISITED_ALBUM, albumId).apply()
+        _lastVisitedAlbum.value = albumId
+    }
+
     fun setShowFilterType(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_SHOW_FILTER_TYPE, enabled).apply()
         _showFilterType.value = enabled
@@ -124,5 +140,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_SHOW_FILTER_TYPE = "KEY_SHOW_FILTER_TYPE"
         private const val KEY_SHOW_FILTER_RES = "KEY_SHOW_FILTER_RES"
         private const val KEY_SHOW_FILTER_EXT = "KEY_SHOW_FILTER_EXT"
+        private const val KEY_START_LAST_ALBUM = "KEY_START_LAST_ALBUM"
+        private const val KEY_LAST_VISITED_ALBUM = "KEY_LAST_VISITED_ALBUM"
     }
 }

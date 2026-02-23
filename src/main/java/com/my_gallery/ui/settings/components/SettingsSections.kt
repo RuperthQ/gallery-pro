@@ -166,12 +166,28 @@ fun InteractionSection(
     autoNavigateEnabled: Boolean,
     onToggleAutoNavigate: (Boolean) -> Unit,
     shortDateEnabled: Boolean,
-    onToggleShortDate: (Boolean) -> Unit
+    onToggleShortDate: (Boolean) -> Unit,
+    startInLastAlbumEnabled: Boolean,
+    onToggleStartInLastAlbum: (Boolean) -> Unit
 ) {
     Column {
         SettingsSectionTitle("Interacción")
         SettingsCard {
             Column {
+                SettingsToggleRow(
+                    title = "Iniciar en último álbum",
+                    description = "Al abrir la app, restaurar el último álbum visitado o mostrar todos los medios.",
+                    icon = Icons.Default.Restore,
+                    checked = startInLastAlbumEnabled,
+                    onCheckedChange = onToggleStartInLastAlbum
+                )
+                
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = GalleryDesign.PaddingMedium),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                
                 SettingsToggleRow(
                     title = "Navegación Automática",
                     description = "Entra directamente al nuevo álbum tras crear o mover archivos.",

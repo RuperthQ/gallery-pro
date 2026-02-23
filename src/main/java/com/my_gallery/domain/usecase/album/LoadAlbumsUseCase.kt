@@ -15,8 +15,10 @@ class LoadAlbumsUseCase @Inject constructor(
         return combine(
             repository.getLocalAlbums(showEmpty),
             securityRepository.isDecoyMode,
-            securityRepository.lockedAlbums
-        ) { list, isDecoy, locked ->
+            securityRepository.lockedAlbums,
+            repository.getFavoritesCountFlow(),
+            repository.getFavoritesThumbnailFlow()
+        ) { list, isDecoy, locked, favCount, favThumb ->
             val filteredList = if (isDecoy) {
                 list.filter { it.id !in locked }
             } else list
@@ -24,26 +26,35 @@ class LoadAlbumsUseCase @Inject constructor(
             val totalCount = filteredList.sumOf { it.count }
             val latestPublicThumb = repository.getLatestPublicThumbnail() ?: filteredList.firstOrNull()?.thumbnail ?: ""
             
-            val virtualAll = AlbumItem(
+            val virtualAlbums = mutableListOf<AlbumItem>()
+            
+            virtualAlbums.add(AlbumItem(
                 id = "ALL_VIRTUAL_ALBUM",
                 name = "Todo",
                 thumbnail = latestPublicThumb,
                 count = totalCount
-            )
+            ))
+            
+            if (favCount > 0) {
+                virtualAlbums.add(AlbumItem(
+                    id = "FAVORITES_VIRTUAL_ALBUM",
+                    name = "Favoritos",
+                    thumbnail = favThumb ?: "",
+                    count = favCount
+                ))
+            }
             
             val vaultCount = if (isDecoy) 0 else repository.getSecureVaultCount()
             if (vaultCount > 0) {
-                val vaultThumb = repository.getSecureVaultThumbnail() ?: ""
-                val vaultVirtual = AlbumItem(
+                virtualAlbums.add(AlbumItem(
                     id = "SECURE_VAULT",
                     name = "Bóveda Segura",
-                    thumbnail = vaultThumb,
+                    thumbnail = repository.getSecureVaultThumbnail() ?: "",
                     count = vaultCount
-                )
-                listOf(virtualAll, vaultVirtual) + filteredList
-            } else {
-                listOf(virtualAll) + filteredList
+                ))
             }
+            
+            virtualAlbums + filteredList
         }
     }
 }

@@ -7,5 +7,8 @@ data class MediaUseCases @Inject constructor(
     val secureMedia: SecureMediaUseCase,
     val unsecureMedia: UnsecureMediaUseCase,
     val renameMedia: RenameMediaUseCase,
-    val rotateMedia: RotateMediaUseCase
+    val rotateMedia: RotateMediaUseCase,
+    val setWallpaper: SetWallpaperUseCase,
+    val toggleFavorite: ToggleFavoriteUseCase,
+    val isFavorite: IsFavoriteUseCase
 )

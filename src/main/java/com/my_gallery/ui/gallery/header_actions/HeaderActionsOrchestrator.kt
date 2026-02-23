@@ -22,6 +22,7 @@ class HeaderActionsOrchestrator(
             listOf(SaveAlbumAction(viewModel)())
         } else if (selectedCount > 0) {
             listOf(
+                ToggleFavoriteAction(viewModel)(),
                 if (areAllSecured) UnsecureAction(viewModel)() else SecureAction(viewModel)(),
                 MoveToAlbumAction(viewModel)(),
                 DeleteAction(viewModel)()

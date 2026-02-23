@@ -31,4 +31,9 @@ object DatabaseModule {
     fun provideMediaDao(db: GalleryDatabase): MediaDao {
         return db.mediaDao()
     }
+
+    @Provides
+    fun provideFavoriteDao(db: GalleryDatabase): com.my_gallery.data.local.dao.FavoriteDao {
+        return db.favoriteDao()
+    }
 }

@@ -226,4 +226,26 @@ class LocalMediaFileOperations @Inject constructor(
             DeleteResult.Error(e.message ?: "Error desconocido")
         }
     }
+
+    suspend fun setWallpaper(item: MediaItem): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val wallpaperManager = android.app.WallpaperManager.getInstance(context)
+            if (item.url.startsWith("vault://")) {
+                val downloadedFile = vaultRepository.decryptMediaToCache(item.id, "jpg")
+                if (downloadedFile != null) {
+                    downloadedFile.inputStream().use { wallpaperManager.setStream(it) }
+                    downloadedFile.delete()
+                    true
+                } else false
+            } else {
+                context.contentResolver.openInputStream(Uri.parse(item.url))?.use {
+                    wallpaperManager.setStream(it)
+                    true
+                } ?: false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
 }

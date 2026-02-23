@@ -20,4 +20,5 @@ class UpdateSettingsUseCase @Inject constructor(
     fun setShowFilterType(enabled: Boolean) = repository.setShowFilterType(enabled)
     fun setShowFilterRes(enabled: Boolean) = repository.setShowFilterRes(enabled)
     fun setShowFilterExt(enabled: Boolean) = repository.setShowFilterExt(enabled)
+    fun setStartInLastAlbum(enabled: Boolean) = repository.setStartInLastAlbum(enabled)
 }

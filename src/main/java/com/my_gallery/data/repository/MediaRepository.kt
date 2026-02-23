@@ -6,6 +6,8 @@ import android.provider.MediaStore
 import androidx.annotation.RequiresApi
 import androidx.paging.PagingSource
 import com.my_gallery.data.local.dao.MediaDao
+import com.my_gallery.data.local.dao.FavoriteDao
+import com.my_gallery.data.local.entity.FavoriteEntity
 import com.my_gallery.data.local.entity.MediaEntity
 import com.my_gallery.data.repository.media.*
 import com.my_gallery.data.security.VaultMediaRepository
@@ -30,7 +32,8 @@ class MediaRepository @Inject constructor(
     private val vaultRepository: VaultMediaRepository,
     private val localDataSource: LocalMediaDataSource,
     private val syncHelper: LocalMediaSyncHelper,
-    private val fileOperations: LocalMediaFileOperations
+    private val fileOperations: LocalMediaFileOperations,
+    private val favoriteDao: FavoriteDao
 ) {
 
     /**
@@ -199,6 +202,9 @@ class MediaRepository @Inject constructor(
     suspend fun updateMediaRotation(item: MediaItem, rotation: Float) = 
         fileOperations.updateMediaRotation(item, rotation)
 
+    suspend fun setWallpaper(item: MediaItem): Boolean = 
+        fileOperations.setWallpaper(item)
+
     suspend fun createAlbum(name: String) = 
         fileOperations.createAlbum(name)
 
@@ -208,6 +214,26 @@ class MediaRepository @Inject constructor(
     @RequiresApi(Build.VERSION_CODES.Q)
     suspend fun deleteMedia(items: List<MediaItem>, removeFromRoom: Boolean = true) = 
         fileOperations.deleteMedia(items, removeFromRoom)
+
+    // --- FAVORITOS ---
+
+    suspend fun toggleFavorite(id: String) = withContext(Dispatchers.IO) {
+        if (favoriteDao.isFavorite(id)) {
+            favoriteDao.delete(id)
+        } else {
+            favoriteDao.insert(FavoriteEntity(id, System.currentTimeMillis()))
+        }
+    }
+
+    suspend fun getFavoritesCount(): Int = favoriteDao.getCount()
+    
+    fun getFavoritesCountFlow(): Flow<Int> = favoriteDao.getCountFlow()
+
+    suspend fun getFavoritesThumbnail(): String? = favoriteDao.getLatestThumbnail()
+
+    fun getFavoritesThumbnailFlow(): Flow<String?> = favoriteDao.getLatestThumbnailFlow()
+    
+    fun isFavorite(id: String): Flow<Boolean> = favoriteDao.isFavoriteFlow(id)
 
     // --- SEGURIDAD / BÓVEDA ---
 

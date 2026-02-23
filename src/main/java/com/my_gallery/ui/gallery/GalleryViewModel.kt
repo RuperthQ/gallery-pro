@@ -36,7 +36,9 @@ class GalleryViewModel @Inject constructor(
     private val _albums = MutableStateFlow<List<AlbumItem>>(emptyList())
     val albums: StateFlow<List<AlbumItem>> = _albums.asStateFlow()
 
-    private val _selectedAlbum = MutableStateFlow<String?>(null)
+    private val _selectedAlbum = MutableStateFlow<String?>(
+        if (settingsRepository.startInLastAlbum.value) settingsRepository.lastVisitedAlbum.value else null
+    )
     val selectedAlbum: StateFlow<String?> = _selectedAlbum.asStateFlow()
 
     fun toggleAlbum(albumId: String?) {
@@ -46,6 +48,7 @@ class GalleryViewModel @Inject constructor(
         } else {
             _selectedAlbum.value = if (_selectedAlbum.value == albumId) null else albumId
         }
+        settingsRepository.setLastVisitedAlbum(_selectedAlbum.value)
     }
 
     val columnCount: StateFlow<Int> = settingsRepository.columnCount
@@ -131,6 +134,12 @@ class GalleryViewModel @Inject constructor(
 
     fun toggleShortDateFilters() {
         settingsUseCases.updateSettings.setShortDateFilters(!shortDateFilters.value)
+    }
+
+    val startInLastAlbum: StateFlow<Boolean> = settingsRepository.startInLastAlbum
+
+    fun toggleStartInLastAlbum() {
+        settingsUseCases.updateSettings.setStartInLastAlbum(!startInLastAlbum.value)
     }
 
     val showFilterType: StateFlow<Boolean> = settingsRepository.showFilterType
@@ -499,6 +508,30 @@ class GalleryViewModel @Inject constructor(
             syncGallery()
         }
     }
+
+    fun setWallpaper(item: MediaItem, onSuccess: () -> Unit, onError: () -> Unit) {
+        viewModelScope.launch {
+            if (mediaUseCases.setWallpaper(item)) onSuccess() else onError()
+        }
+    }
+
+    fun toggleFavorite(item: MediaItem) {
+        viewModelScope.launch {
+            mediaUseCases.toggleFavorite(item.id)
+            syncGallery()
+        }
+    }
+
+    fun toggleFavoriteSelection() {
+        viewModelScope.launch {
+            val selectedIds = _selectedMediaIds.value.toList()
+            mediaUseCases.toggleFavorite(selectedIds)
+            exitSelection()
+            syncGallery()
+        }
+    }
+
+    fun isFavorite(id: String): Flow<Boolean> = mediaUseCases.isFavorite(id)
 
     @RequiresApi(Build.VERSION_CODES.Q)
     fun onPermissionResult(success: Boolean) {

@@ -21,8 +21,12 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -180,16 +184,20 @@ fun MediaViewerScreen(
         )
 
         // 2. OVERLAYS DE CONTROL (Barra superior y carrusel inferior)
+        val currentContext = LocalContext.current
+        val currentMedia = (items[pagerState.currentPage] as? GalleryUiModel.Media)?.item
+        val isFavorite by (currentMedia?.let { viewModel.isFavorite(it.id) } ?: kotlinx.coroutines.flow.flowOf(false)).collectAsStateWithLifecycle(initialValue = false)
+
         AnimatedVisibility(
             visible = uiVisible && !isFullScreen,
             enter = fadeIn(tween(GalleryDesign.ViewerAnimFast)) + scaleIn(initialScale = GalleryDesign.ViewerScaleOverlay, animationSpec = tween(GalleryDesign.ViewerAnimFast)),
             exit = fadeOut(tween(GalleryDesign.ViewerAnimFast)) + scaleOut(targetScale = GalleryDesign.ViewerScaleOverlay, animationSpec = tween(GalleryDesign.ViewerAnimFast))
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                val currentMedia = (items[pagerState.currentPage] as? GalleryUiModel.Media)?.item
-                
                 ViewerTopBar(
                     title = currentMedia?.title ?: "",
+                    isFavorite = isFavorite,
+                    onToggleFavorite = { currentMedia?.let { viewModel.toggleFavorite(it) } },
                     onClose = onClose,
                     onMoreOptions = { showMenu = true }
                 )
@@ -209,17 +217,36 @@ fun MediaViewerScreen(
             }
         }
 
-        // 3. MENÚ PREMIUM DE OPCIONES
-        val currentMedia = (items[pagerState.currentPage] as? GalleryUiModel.Media)?.item
+        val menuItems = mutableListOf(
+            PremiumMenuItem("Compartir", Icons.Default.Share, onClick = { /* TODO */ showMenu = false }),
+            PremiumMenuItem(
+                if (isFavorite) "Quitar de favoritos" else "Añadir a favoritos", 
+                if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, 
+                onClick = { currentMedia?.let { viewModel.toggleFavorite(it) }; showMenu = false }
+            ),
+            PremiumMenuItem("Información", Icons.Default.Info, onClick = { showMenu = false; onShowMetadata() }),
+            PremiumMenuItem("Auto-reproducción", Icons.Default.Settings, isSelected = autoplayEnabled, showToggle = true, onClick = { viewModel.toggleAutoplay() }),
+            PremiumMenuItem("Rotar", Icons.Default.RotateRight, onClick = { currentMedia?.let { viewModel.rotateMedia(it) }; showMenu = false })
+        )
+        
+        if (currentMedia?.mimeType?.startsWith("image/") == true) {
+            menuItems.add(
+                PremiumMenuItem("Establecer como fondo", Icons.Default.Wallpaper, onClick = {
+                    showMenu = false
+                    Toast.makeText(currentContext, "Preparando fondo...", Toast.LENGTH_SHORT).show()
+                    viewModel.setWallpaper(
+                        item = currentMedia,
+                        onSuccess = { Toast.makeText(currentContext, "Fondo aplicado", Toast.LENGTH_SHORT).show() },
+                        onError = { Toast.makeText(currentContext, "Error al aplicar el fondo", Toast.LENGTH_SHORT).show() }
+                    )
+                })
+            )
+        }
+        
         PremiumMenu(
             visible = showMenu,
             onDismiss = { showMenu = false },
-            items = listOf(
-                PremiumMenuItem("Compartir", Icons.Default.Share, onClick = { /* TODO */ showMenu = false }),
-                PremiumMenuItem("Información", Icons.Default.Info, onClick = { showMenu = false; onShowMetadata() }),
-                PremiumMenuItem("Auto-reproducción", Icons.Default.Settings, isSelected = autoplayEnabled, showToggle = true, onClick = { viewModel.toggleAutoplay() }),
-                PremiumMenuItem("Rotar", Icons.Default.RotateRight, onClick = { currentMedia?.let { viewModel.rotateMedia(it) }; showMenu = false })
-            )
+            items = menuItems
         )
 
         // 4. CONTROLES DE BLOQUEO (Lock/Unlock)

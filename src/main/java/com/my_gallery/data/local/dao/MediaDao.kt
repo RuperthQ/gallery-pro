@@ -46,8 +46,9 @@ interface MediaDao {
             OR (:useSD = 1 AND (width < 1280 AND height < 1280))
         )
         AND (
-            (:albumId IS NOT NULL AND albumId = :albumId) 
+            (:albumId IS NOT NULL AND :albumId != 'FAVORITES_VIRTUAL_ALBUM' AND albumId = :albumId) 
             OR (:albumId IS NULL AND albumId != 'SECURE_VAULT')
+            OR (:albumId = 'FAVORITES_VIRTUAL_ALBUM' AND id IN (SELECT id FROM favorites))
         )
         ORDER BY dateAdded DESC, id DESC
     """)
@@ -88,8 +89,9 @@ interface MediaDao {
             OR (:useSD = 1 AND (width < 1280 AND height < 1280))
         )
         AND (
-            (:albumId IS NOT NULL AND albumId = :albumId) 
+            (:albumId IS NOT NULL AND :albumId != 'FAVORITES_VIRTUAL_ALBUM' AND albumId = :albumId) 
             OR (:albumId IS NULL AND albumId != 'SECURE_VAULT')
+            OR (:albumId = 'FAVORITES_VIRTUAL_ALBUM' AND id IN (SELECT id FROM favorites))
         )
         ORDER BY dateAdded DESC, id DESC
     """)
@@ -134,8 +136,9 @@ interface MediaDao {
             OR (:useSD = 1 AND (width < 1280 AND height < 1280))
         )
         AND (
-            (:albumId IS NOT NULL AND albumId = :albumId) 
+            (:albumId IS NOT NULL AND :albumId != 'FAVORITES_VIRTUAL_ALBUM' AND albumId = :albumId) 
             OR (:albumId IS NULL AND albumId != 'SECURE_VAULT')
+            OR (:albumId = 'FAVORITES_VIRTUAL_ALBUM' AND id IN (SELECT id FROM favorites))
         )
         GROUP BY period
         ORDER BY MAX(dateAdded) DESC
@@ -175,8 +178,9 @@ interface MediaDao {
             OR (:useSD = 1 AND (width < 1280 AND height < 1280))
         )
         AND (
-            (:albumId IS NOT NULL AND albumId = :albumId) 
+            (:albumId IS NOT NULL AND :albumId != 'FAVORITES_VIRTUAL_ALBUM' AND albumId = :albumId) 
             OR (:albumId IS NULL AND albumId != 'SECURE_VAULT')
+            OR (:albumId = 'FAVORITES_VIRTUAL_ALBUM' AND id IN (SELECT id FROM favorites))
         )
         AND (
             dateAdded > (SELECT dateAdded FROM media_items WHERE id = :targetId)

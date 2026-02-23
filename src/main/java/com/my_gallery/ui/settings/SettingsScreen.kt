@@ -36,6 +36,7 @@ fun SettingsScreen(
     val themeColor by galleryViewModel.themeColor.collectAsStateWithLifecycle()
     val autoplayEnabled by galleryViewModel.autoplayEnabled.collectAsStateWithLifecycle()
     val autoNavigateAfterMove by galleryViewModel.autoNavigateAfterMove.collectAsStateWithLifecycle()
+    val startInLastAlbum by galleryViewModel.startInLastAlbum.collectAsStateWithLifecycle()
     val shortDateFilters by galleryViewModel.shortDateFilters.collectAsStateWithLifecycle()
     val showFilterType by galleryViewModel.showFilterType.collectAsStateWithLifecycle()
     val showFilterRes by galleryViewModel.showFilterRes.collectAsStateWithLifecycle()
@@ -97,7 +98,9 @@ fun SettingsScreen(
                 autoNavigateEnabled = autoNavigateAfterMove,
                 onToggleAutoNavigate = { galleryViewModel.toggleAutoNavigate() },
                 shortDateEnabled = shortDateFilters,
-                onToggleShortDate = { galleryViewModel.toggleShortDateFilters() }
+                onToggleShortDate = { galleryViewModel.toggleShortDateFilters() },
+                startInLastAlbumEnabled = startInLastAlbum,
+                onToggleStartInLastAlbum = { galleryViewModel.toggleStartInLastAlbum() }
             )
 
             // 5. SECCIÓN: FILTROS

@@ -7,9 +7,11 @@ import com.my_gallery.domain.model.MediaItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
 import java.util.Locale
 import javax.inject.Inject
 import android.os.Build
+import android.net.Uri
 import androidx.annotation.RequiresApi
 import com.my_gallery.data.repository.SecurityRepository
 import com.my_gallery.data.repository.SettingsRepository
@@ -127,6 +129,12 @@ class GalleryViewModel @Inject constructor(
 
     private val _viewerIndex = MutableStateFlow(0)
     val viewerIndex: StateFlow<Int> = _viewerIndex.asStateFlow()
+
+    private val _isExternalLaunch = MutableStateFlow(false)
+    val isExternalLaunch: StateFlow<Boolean> = _isExternalLaunch.asStateFlow()
+
+    private val _exitAppEvent = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val exitAppEvent = _exitAppEvent.asSharedFlow()
 
     val autoplayEnabled: StateFlow<Boolean> = settingsRepository.autoplayEnabled
 
@@ -412,11 +420,27 @@ class GalleryViewModel @Inject constructor(
     }
 
     fun closeViewer() {
+        if (_isExternalLaunch.value) {
+            viewModelScope.launch {
+                _exitAppEvent.emit(Unit)
+            }
+            return // No limpiar el estado para evitar el parpadeo de la cuadrícula al cerrar
+        }
         _viewerItem.value = null
         _viewerIndex.value = 0
     }
 
-
+    fun handleExternalIntent(uri: Uri, mimeType: String?) {
+        _isExternalLaunch.value = true
+        viewModelScope.launch {
+            // Intentar cargar el ítem desde el repositorio (DB o external fallback)
+            val externalItem = galleryUseCases.getExternalMedia(uri, mimeType)
+            if (externalItem != null) {
+                _viewerItem.value = externalItem
+                _viewerIndex.value = 0
+            }
+        }
+    }
 
     fun syncGallery() {
         groupIdsCache.clear()

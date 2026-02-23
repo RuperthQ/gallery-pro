@@ -80,6 +80,76 @@ class MediaRepository @Inject constructor(
         mediaDao.getMediaByIds(ids).map { it.toDomain() }
     }
 
+    suspend fun getMediaByUrl(url: String): MediaItem? = withContext(Dispatchers.IO) {
+        mediaDao.getMediaByUrl(url)?.toDomain()
+    }
+
+    suspend fun getMediaFromExternalUri(uri: android.net.Uri, mimeType: String?): MediaItem? = withContext(Dispatchers.IO) {
+        // 1. Intentar buscar en DB primero
+        val existing = mediaDao.getMediaByUrl(uri.toString())?.toDomain()
+        if (existing != null) return@withContext existing
+
+        // 2. Si no está en DB, consultar ContentResolver (MediaStore)
+        val projection = arrayOf(
+            MediaStore.MediaColumns._ID,
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.MIME_TYPE,
+            MediaStore.MediaColumns.SIZE,
+            MediaStore.MediaColumns.WIDTH,
+            MediaStore.MediaColumns.HEIGHT,
+            MediaStore.MediaColumns.DATA,
+            MediaStore.MediaColumns.DATE_ADDED
+        )
+
+        try {
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idIdx = cursor.getColumnIndex(MediaStore.MediaColumns._ID)
+                    val nameIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                    val mimeIdx = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
+                    val sizeIdx = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                    val widthIdx = cursor.getColumnIndex(MediaStore.MediaColumns.WIDTH)
+                    val heightIdx = cursor.getColumnIndex(MediaStore.MediaColumns.HEIGHT)
+                    val dataIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                    val dateAddedIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED)
+
+                    val id = if (idIdx != -1) cursor.getLong(idIdx) else uri.hashCode().toLong()
+                    val name = if (nameIdx != -1) cursor.getString(nameIdx) else "External Media"
+                    val mime = if (mimeIdx != -1) cursor.getString(mimeIdx) ?: mimeType ?: "image/jpeg" else mimeType ?: "image/jpeg"
+                    val path = if (dataIdx != -1) cursor.getString(dataIdx) else null
+                    val dateAdded = if (dateAddedIdx != -1) cursor.getLong(dateAddedIdx) * 1000L else System.currentTimeMillis()
+
+                    return@withContext MediaItem(
+                        id = "ext_$id",
+                        url = uri.toString(),
+                        thumbnail = uri.toString(),
+                        title = name,
+                        dateAdded = dateAdded,
+                        mimeType = mime,
+                        size = if (sizeIdx != -1) cursor.getLong(sizeIdx) else 0L,
+                        width = if (widthIdx != -1) cursor.getInt(widthIdx) else 0,
+                        height = if (heightIdx != -1) cursor.getInt(heightIdx) else 0,
+                        path = path,
+                        source = "EXTERNAL"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 3. Fallback: Crear item básico si el cursor falla pero tenemos el URI
+        return@withContext MediaItem(
+            id = "ext_${uri.hashCode()}",
+            url = uri.toString(),
+            thumbnail = uri.toString(),
+            title = "External Media",
+            dateAdded = System.currentTimeMillis(),
+            mimeType = mimeType ?: "image/jpeg",
+            source = "EXTERNAL"
+        )
+    }
+
     suspend fun getMediaIdsByPeriod(
         source: String,
         period: String,

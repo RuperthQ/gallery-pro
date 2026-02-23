@@ -208,6 +208,9 @@ interface MediaDao {
     @Query("SELECT * FROM media_items WHERE id IN (:ids)")
     suspend fun getMediaByIds(ids: List<String>): List<MediaEntity>
 
+    @Query("SELECT * FROM media_items WHERE url = :url LIMIT 1")
+    suspend fun getMediaByUrl(url: String): MediaEntity?
+
     @Query("SELECT DISTINCT mimeType FROM media_items WHERE source = :source")
     fun getDistinctMimeTypes(source: String): Flow<List<String>>
 

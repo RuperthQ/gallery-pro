@@ -50,7 +50,8 @@ fun ViewerPager(
             !(pagerState.currentPage == 0 && pagerState.currentPageOffsetFraction < 0), 
         pageSpacing = GalleryDesign.PaddingLarge
     ) { pageIndex ->
-        val uiModel = items[pageIndex]
+        val isExternal = initialItem.source == "EXTERNAL"
+        val uiModel = if (!isExternal && pageIndex < items.itemCount) items[pageIndex] else null
         
         // --- LOGICA DE FALLBACK PARA EVITAR "CARGANDO" EN EL ITEM INICIAL ---
         val mediaItem = when {

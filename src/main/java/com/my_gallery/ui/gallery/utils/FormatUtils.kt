@@ -15,7 +15,7 @@ object FormatUtils {
         }
     }
 
-    private val dateFormatter = java.text.SimpleDateFormat("dd 'de' MMMM", java.util.Locale("es", "ES"))
+    private val dateFormatter = java.text.SimpleDateFormat("dd 'de' MMMM 'de' yyyy", java.util.Locale("es", "ES"))
     
     fun formatDate(timestamp: Long): String {
         return dateFormatter.format(java.util.Date(timestamp)).replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase(java.util.Locale.ROOT) else char.toString() }

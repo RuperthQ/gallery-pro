@@ -72,7 +72,10 @@ fun MediaViewerScreen(
 
     val scope = rememberCoroutineScope()
     val autoplayEnabled by viewModel.autoplayEnabled.collectAsStateWithLifecycle()
-    val pagerState = rememberPagerState(initialPage = initialIndex) { items.itemCount }
+    
+    val isExternal = item.source == "EXTERNAL"
+    val pagerCount = if (isExternal) 1 else items.itemCount
+    val pagerState = rememberPagerState(initialPage = if (isExternal) 0 else initialIndex) { pagerCount }
     val thumbnailListState = rememberLazyListState()
     
     val context = LocalContext.current
@@ -185,7 +188,11 @@ fun MediaViewerScreen(
 
         // 2. OVERLAYS DE CONTROL (Barra superior y carrusel inferior)
         val currentContext = LocalContext.current
-        val currentMedia = (items[pagerState.currentPage] as? GalleryUiModel.Media)?.item
+        val currentMedia = when {
+            isExternal -> item
+            pagerState.currentPage < items.itemCount -> (items[pagerState.currentPage] as? GalleryUiModel.Media)?.item
+            else -> item // Fallback al inicial si hay desincronización
+        }
         val isFavorite by (currentMedia?.let { viewModel.isFavorite(it.id) } ?: kotlinx.coroutines.flow.flowOf(false)).collectAsStateWithLifecycle(initialValue = false)
 
         AnimatedVisibility(
@@ -202,7 +209,7 @@ fun MediaViewerScreen(
                     onMoreOptions = { showMenu = true }
                 )
 
-                if (currentMedia?.mimeType?.startsWith("video/") == false) {
+                if (currentMedia?.mimeType?.startsWith("video/") == false && !isExternal && items.itemCount > 1) {
                     ViewerCarousel(
                         items = items,
                         currentPage = pagerState.currentPage,

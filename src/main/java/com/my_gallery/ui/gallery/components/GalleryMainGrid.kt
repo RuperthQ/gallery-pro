@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -50,9 +51,12 @@ fun GalleryMainGrid(
 ) {
     val animatedColumns by animateIntAsState(targetValue = columnCount, label = "columnAnim")
     val context = androidx.compose.ui.platform.LocalContext.current
+    val gridState = rememberLazyGridState()
     
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(animatedColumns),
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Fixed(animatedColumns),
         contentPadding = PaddingValues(
             bottom = if (menuStyle == MenuStyle.BOTTOM_FLOATING) {
                 WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 90.dp
@@ -175,6 +179,13 @@ fun GalleryMainGrid(
                     CircularProgressIndicator(modifier = Modifier.size(GalleryDesign.IconSizeNormal))
                 }
             }
+            }
         }
+
+        VerticalScrollbar(
+            gridState = gridState,
+            totalItems = items.itemCount,
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
     }
 }

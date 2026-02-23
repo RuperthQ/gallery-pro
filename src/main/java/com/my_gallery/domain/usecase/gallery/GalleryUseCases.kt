@@ -13,5 +13,6 @@ data class GalleryUseCases @Inject constructor(
     val getMediaRank: GetMediaRankUseCase,
     val updateFiltersDisplay: UpdateFiltersDisplayUseCase,
     val getMediaChanges: GetMediaChangesUseCase,
-    val getGalleryMediaFlow: GetGalleryMediaFlowUseCase
+    val getGalleryMediaFlow: GetGalleryMediaFlowUseCase,
+    val getExternalMedia: GetExternalMediaUseCase
 )

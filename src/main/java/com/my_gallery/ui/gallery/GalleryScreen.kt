@@ -50,6 +50,7 @@ fun GalleryScreen(
     val selectedMediaIds by viewModel.selectedMediaIds.collectAsStateWithLifecycle()
     val menuStyle by viewModel.menuStyle.collectAsStateWithLifecycle()
     val albumBehavior by viewModel.albumBehavior.collectAsStateWithLifecycle()
+    val isExternalLaunch by viewModel.isExternalLaunch.collectAsStateWithLifecycle()
     
     // --- PAGING ITEMS ---
     val items = viewModel.pagedItems.collectAsLazyPagingItems()
@@ -67,9 +68,12 @@ fun GalleryScreen(
     val onAlbumLongClick = rememberAlbumLongClick(context, securityViewModel)
 
     // --- UI ORQUESTADA ---
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    val backgroundColor = if (isExternalLaunch) Color.Black else MaterialTheme.colorScheme.background
+    
+    Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
         
-        // 1. GRID PRINCIPAL (Contenido)
+        if (!isExternalLaunch) {
+            // 1. GRID PRINCIPAL (Contenido)
         GalleryMainGrid(
             items = items,
             viewModel = viewModel,
@@ -138,6 +142,7 @@ fun GalleryScreen(
         ) {
             FloatingGalleryMenu(viewModel = viewModel)
         }
+    }
 
         // 6. DIÁLOGOS, VISOR Y AJUSTES
         GalleryDialogOrchestrator(

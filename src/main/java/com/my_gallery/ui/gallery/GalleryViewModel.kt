@@ -96,6 +96,16 @@ class GalleryViewModel @Inject constructor(
     fun showSettings() = updateState { it.copy(showSettings = true) }
     fun hideSettings() = updateState { it.copy(showSettings = false) }
 
+    fun showTrash() = updateState { it.copy(showTrash = true) }
+    fun hideTrash() = updateState { it.copy(showTrash = false) }
+
+    fun deleteAlbum(album: com.my_gallery.domain.model.AlbumItem) {
+        viewModelScope.launch {
+            albumUseCases.deleteAlbum(album)
+            syncGallery()
+        }
+    }
+
     val menuStyle: StateFlow<MenuStyle> = settingsRepository.menuStyle
 
     fun setMenuStyle(style: MenuStyle) {

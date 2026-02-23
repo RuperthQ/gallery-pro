@@ -63,7 +63,7 @@ fun PremiumMenu(
                         modifier = Modifier
                             .size(width = GalleryDesign.DragIndicatorWidth, height = GalleryDesign.DragIndicatorHeight)
                             .clip(RoundedCornerShape(GalleryDesign.PaddingTiny / 2))
-                            .background(Color.White.copy(alpha = GalleryDesign.AlphaDisable))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = GalleryDesign.AlphaDisable))
                             .align(Alignment.CenterHorizontally)
                     )
                     
@@ -80,10 +80,11 @@ fun PremiumMenu(
 
 @Composable
 fun PremiumMenuRow(item: PremiumMenuItem) {
+    val contentColor = if (item.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(GalleryDesign.MenuItemHeight) // Más compacto
+            .height(GalleryDesign.MenuItemHeight)
             .clip(GalleryDesign.CardShape)
             .clickable { item.onClick() }
             .padding(horizontal = GalleryDesign.PaddingLarge),
@@ -92,14 +93,14 @@ fun PremiumMenuRow(item: PremiumMenuItem) {
         Icon(
             imageVector = item.icon,
             contentDescription = null,
-            tint = if (item.isSelected) MaterialTheme.colorScheme.primary else Color.White,
+            tint = contentColor,
             modifier = Modifier.size(GalleryDesign.IconSizeNormal)
         )
         Spacer(modifier = Modifier.width(GalleryDesign.PaddingMedium))
         Text(
             text = item.label,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (item.isSelected) MaterialTheme.colorScheme.primary else Color.White,
+            color = contentColor,
             modifier = Modifier.weight(1f)
         )
         if (item.showToggle) {

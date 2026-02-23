@@ -16,10 +16,13 @@ fun rememberAlbumClick(
 ): (AlbumItem) -> Unit {
     return remember(context, viewModel, securityViewModel) {
         { album ->
-            if (album.id != "ALL_VIRTUAL_ALBUM" && securityViewModel.isAlbumLocked(album.id)) {
-                BiometricHandler.authenticateAlbumAction(context, album, true, 
-                    onSuccess = { viewModel.toggleAlbum(album.id) })
-            } else viewModel.toggleAlbum(album.id)
+            when {
+                album.id == "TRASH_VIRTUAL_ALBUM" -> viewModel.showTrash()
+                album.id != "ALL_VIRTUAL_ALBUM" && securityViewModel.isAlbumLocked(album.id) ->
+                    BiometricHandler.authenticateAlbumAction(context, album, true,
+                        onSuccess = { viewModel.toggleAlbum(album.id) })
+                else -> viewModel.toggleAlbum(album.id)
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ import com.my_gallery.domain.model.AlbumItem
 import com.my_gallery.ui.gallery.GalleryUiModel
 import com.my_gallery.ui.gallery.GalleryViewModel
 import com.my_gallery.ui.gallery.MediaViewerScreen
+import com.my_gallery.ui.recovery.RecoveryScreen
 import com.my_gallery.ui.security.SecurityViewModel
 import com.my_gallery.ui.settings.SettingsScreen
 import com.my_gallery.ui.theme.GalleryDesign
@@ -91,4 +92,17 @@ fun GalleryDialogOrchestrator(
             onBack = { viewModel.hideSettings() }
         )
     }
+
+    // --- PANTALLA DE PAPELERA ---
+    AnimatedVisibility(
+        visible = uiState.showTrash,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+    ) {
+        RecoveryScreen(
+            onClose = { viewModel.hideTrash() }
+        )
+    }
 }
+
+

@@ -53,6 +53,18 @@ class LoadAlbumsUseCase @Inject constructor(
                     count = vaultCount
                 ))
             }
+
+            if (!isDecoy && repository.isTrashedSupported) {
+                val trashCount = repository.getTrashedCount()
+                if (trashCount > 0) {
+                    virtualAlbums.add(AlbumItem(
+                        id = "TRASH_VIRTUAL_ALBUM",
+                        name = "Papelera",
+                        thumbnail = repository.getTrashedThumbnail() ?: "",
+                        count = trashCount
+                    ))
+                }
+            }
             
             virtualAlbums + filteredList
         }

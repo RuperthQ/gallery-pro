@@ -93,7 +93,8 @@ fun GalleryMainGrid(
                     selectedAlbumId = selectedAlbum,
                     onAlbumClick = onAlbumClick,
                     lockedAlbums = lockedAlbums,
-                    onAlbumLongClick = onAlbumLongClick
+                    onAlbumLongClick = onAlbumLongClick,
+                    onDeleteAlbum = { viewModel.deleteAlbum(it) }
                 )
             }
         }

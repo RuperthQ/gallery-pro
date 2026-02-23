@@ -1,6 +1,10 @@
 package com.my_gallery.ui.gallery.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,12 +18,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,6 +46,7 @@ import coil.request.ImageRequest
 import com.my_gallery.data.local.dao.SectionMetadataRow
 import com.my_gallery.domain.model.MediaItem
 import com.my_gallery.ui.components.shimmerEffect
+import com.my_gallery.ui.gallery.utils.FormatUtils
 import com.my_gallery.ui.theme.GalleryDesign
 import com.my_gallery.ui.theme.GalleryDesign.premiumBorder
 
@@ -104,8 +106,8 @@ fun SectionHeader(
         
         AnimatedVisibility(
             visible = isExpanded && metadata != null,
-            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
         ) {
             val details = remember(metadata) {
                 val imgs = metadata?.images ?: 0
@@ -223,7 +225,7 @@ fun GalleryItem(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = com.my_gallery.ui.gallery.utils.FormatUtils.formatDuration(item.duration),
+                        text = FormatUtils.formatDuration(item.duration),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
                         fontWeight = FontWeight.Bold

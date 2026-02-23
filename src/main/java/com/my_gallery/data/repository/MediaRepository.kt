@@ -13,6 +13,7 @@ import com.my_gallery.data.repository.media.*
 import com.my_gallery.data.security.VaultMediaRepository
 import com.my_gallery.domain.model.AlbumItem
 import com.my_gallery.domain.model.MediaItem
+import com.my_gallery.domain.model.TrashedMediaItem
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -33,7 +34,8 @@ class MediaRepository @Inject constructor(
     private val localDataSource: LocalMediaDataSource,
     private val syncHelper: LocalMediaSyncHelper,
     private val fileOperations: LocalMediaFileOperations,
-    private val favoriteDao: FavoriteDao
+    private val favoriteDao: FavoriteDao,
+    private val trashDataSource: TrashDataSource
 ) {
 
     /**
@@ -56,6 +58,23 @@ class MediaRepository @Inject constructor(
 
     fun getLocalAlbums(includeEmpty: Boolean = false): Flow<List<AlbumItem>> = 
         localDataSource.getLocalAlbums(includeEmpty)
+
+    /**
+     * Elimina la carpeta física de un álbum.
+     * Los archivos NO se borran — solo la carpeta si está vacía.
+     * Si la carpeta tiene archivos, el MediaStore simplemente deja de agruparlos.
+     */
+    suspend fun deleteAlbumFolder(albumId: String): Boolean = withContext(Dispatchers.IO) {
+        val folder = localDataSource.getAlbumPathById(albumId) ?: return@withContext false
+        try {
+            folder.deleteRecursively()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+
 
     suspend fun getMediaByIds(ids: List<String>): List<MediaItem> = withContext(Dispatchers.IO) {
         mediaDao.getMediaByIds(ids).map { it.toDomain() }
@@ -234,6 +253,17 @@ class MediaRepository @Inject constructor(
     fun getFavoritesThumbnailFlow(): Flow<String?> = favoriteDao.getLatestThumbnailFlow()
     
     fun isFavorite(id: String): Flow<Boolean> = favoriteDao.isFavoriteFlow(id)
+
+    // --- PAPELERA ---
+
+    fun getTrashedMedia() = trashDataSource.getTrashedMedia()
+    val isTrashedSupported: Boolean get() = trashDataSource.isSupported
+    suspend fun getTrashedCount(): Int = trashDataSource.getTrashedCount()
+    suspend fun getTrashedThumbnail(): String? = trashDataSource.getTrashedThumbnail()
+    suspend fun restoreFromTrash(item: TrashedMediaItem): Boolean = trashDataSource.restoreFromTrash(item)
+    suspend fun deletePermanently(item: TrashedMediaItem): Boolean = trashDataSource.deletePermanently(item)
+    suspend fun deletePermanentlyAll(items: List<TrashedMediaItem>): Int =
+        items.count { trashDataSource.deletePermanently(it) }
 
     // --- SEGURIDAD / BÓVEDA ---
 

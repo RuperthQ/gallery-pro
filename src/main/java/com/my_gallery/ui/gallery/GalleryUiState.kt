@@ -5,6 +5,7 @@ data class GalleryUiState(
     val isAlbumCreationPending: Boolean = false,
     val showFilters: Boolean = false,
     val showSettings: Boolean = false,
+    val showTrash: Boolean = false,
     val showCreateAlbumDialog: Boolean = false,
     val showMoveToAlbumDialog: Boolean = false,
     val showDeleteConfirmation: Boolean = false,

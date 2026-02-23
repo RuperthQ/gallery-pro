@@ -1,14 +1,24 @@
 package com.my_gallery.ui.gallery.components
 
 import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
@@ -59,14 +70,14 @@ fun GalleryMainGrid(
             columns = GridCells.Fixed(animatedColumns),
         contentPadding = PaddingValues(
             bottom = if (menuStyle == MenuStyle.BOTTOM_FLOATING) {
-                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 90.dp
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 40.dp
             } else GalleryDesign.PaddingLarge,
             start = GalleryDesign.PaddingSmall,
             end = GalleryDesign.PaddingSmall
         ),
         horizontalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall),
         verticalArrangement = Arrangement.spacedBy(GalleryDesign.PaddingSmall),
-        modifier = modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize()
     ) {
         // --- ESPACIADO INICIAL ---
         if (menuStyle == MenuStyle.TOP_HEADER) {
@@ -184,8 +195,11 @@ fun GalleryMainGrid(
 
         VerticalScrollbar(
             gridState = gridState,
-            totalItems = items.itemCount,
-            modifier = Modifier.align(Alignment.CenterEnd)
+            menuStyle = menuStyle,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(top = 150.dp) // Baja el scrollbar para librar el header flotante
+                .zIndex(10f)
         )
     }
 }

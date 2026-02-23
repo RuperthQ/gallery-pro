@@ -21,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import com.my_gallery.domain.model.AlbumItem
 import com.my_gallery.data.local.dao.SectionMetadataRow
+import com.my_gallery.ui.gallery.utils.FormatUtils
 import com.my_gallery.ui.theme.AppThemeColor
 
 @HiltViewModel
@@ -318,7 +319,19 @@ class GalleryViewModel @Inject constructor(
     }.flatMapLatest { it }.stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
     val availableFilters: StateFlow<List<String>> = sectionMetadata.map { metadata ->
-        listOf("Todos") + metadata.keys.map { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase(Locale.ROOT) else char.toString() } }
+        val monthPeriods = metadata.keys.mapNotNull { dayLabel ->
+            // Intentar extraer el mes/año para el filtro
+            try {
+                // Como las claves son "Día de Mes de Año", podemos usar el timestamp de los metadatos si lo tuviéramos
+                // O simplemente parsear/convertir. Una forma segura es usar FormatUtils
+                val date = java.text.SimpleDateFormat("dd 'de' MMMM 'de' yyyy", java.util.Locale("es", "ES")).parse(dayLabel)
+                date?.let { FormatUtils.formatPeriodLabel(it, shortDateFilters.value) }
+            } catch (e: Exception) {
+                null
+            }
+        }.distinct()
+        
+        listOf("Todos") + monthPeriods.map { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase(Locale.ROOT) else char.toString() } }
     }.stateIn(viewModelScope, SharingStarted.Lazily, listOf("Todos"))
 
     @OptIn(ExperimentalCoroutinesApi::class)

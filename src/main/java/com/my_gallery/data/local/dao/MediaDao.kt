@@ -115,7 +115,7 @@ interface MediaDao {
 
     @Query("""
         SELECT 
-            strftime('%m-%Y', datetime(dateAdded/1000, 'unixepoch')) as period,
+            strftime('%d-%m-%Y', datetime(dateAdded/1000, 'unixepoch')) as period,
             COUNT(*) as total,
             SUM(CASE WHEN mimeType LIKE 'image/%' THEN 1 ELSE 0 END) as images,
             SUM(CASE WHEN mimeType LIKE 'video/%' THEN 1 ELSE 0 END) as videos

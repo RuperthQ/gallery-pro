@@ -97,6 +97,7 @@ fun HeaderLayout(
 
             HeaderActionsRow(viewModel, showFilters)
         }
+        ActiveFilterPills(viewModel = viewModel)
 
         AnimatedVisibility(
             visible = showFilters,

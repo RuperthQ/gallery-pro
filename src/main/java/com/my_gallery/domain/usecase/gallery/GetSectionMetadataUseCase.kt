@@ -28,10 +28,11 @@ class GetSectionMetadataUseCase @Inject constructor(
             list.associateBy { row ->
                 try {
                     val parts = row.period.split("-")
-                    val month = parts[0].toInt()
-                    val year = parts[1].toInt()
-                    val cal = Calendar.getInstance().apply { set(year, month - 1, 1) }
-                    FormatUtils.formatPeriodLabel(cal.time, shortDates)
+                    val day = parts[0].toInt()
+                    val month = parts[1].toInt()
+                    val year = parts[2].toInt()
+                    val cal = Calendar.getInstance().apply { set(year, month - 1, day) }
+                    FormatUtils.formatDate(cal.time.time)
                 } catch (e: Exception) {
                     row.period
                 }

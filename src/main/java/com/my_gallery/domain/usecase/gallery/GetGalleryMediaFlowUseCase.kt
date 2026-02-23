@@ -32,6 +32,7 @@ class GetGalleryMediaFlowUseCase @Inject constructor(
             extensions = extensions.toList(),
             resolutions = resolutions.toList(),
             albumId = albumId,
+            isShortDate = isShortDate,
             withSeparators = withSeparators
         )
     }

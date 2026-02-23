@@ -113,9 +113,13 @@ fun SectionHeader(
                 val imgs = metadata?.images ?: 0
                 val vids = metadata?.videos ?: 0
                 buildString {
-                    if (imgs > 0) append("$imgs imágenes")
+                    if (imgs > 0) {
+                        append("$imgs ${if (imgs == 1) "imagen" else "imágenes"}")
+                    }
                     if (imgs > 0 && vids > 0) append(" | ")
-                    if (vids > 0) append("$vids videos")
+                    if (vids > 0) {
+                        append("$vids ${if (vids == 1) "video" else "videos"}")
+                    }
                 }
             }
 
@@ -124,7 +128,10 @@ fun SectionHeader(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                modifier = Modifier.padding(start = if (onToggleCheck != null) GalleryDesign.PaddingLarge + GalleryDesign.IconSizeSmall + GalleryDesign.PaddingSmall else GalleryDesign.PaddingMedium, top = GalleryDesign.PaddingTiny)
+                modifier = Modifier.padding(
+                    start = if (onToggleCheck != null) 28.dp else GalleryDesign.PaddingMedium,
+                    top = GalleryDesign.PaddingTiny
+                )
             )
         }
     }

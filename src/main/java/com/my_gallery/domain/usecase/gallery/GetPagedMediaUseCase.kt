@@ -24,6 +24,7 @@ class GetPagedMediaUseCase @Inject constructor(
         extensions: List<String>,
         resolutions: List<String>,
         albumId: String?,
+        isShortDate: Boolean = false,
         withSeparators: Boolean = true
     ): Flow<PagingData<GalleryUiModel>> {
         val flow = Pager(
@@ -56,13 +57,23 @@ class GetPagedMediaUseCase @Inject constructor(
                 pagingData.insertSeparators { before: GalleryUiModel?, after: GalleryUiModel? ->
                     if (after == null) return@insertSeparators null
                     val a = (after as GalleryUiModel.Media).item
-                    val afterDate = FormatUtils.formatDate(a.dateAdded)
+                    val afterLabel = FormatUtils.formatDate(a.dateAdded)
                     val afterPeriod = SimpleDateFormat("MM-yyyy", Locale.US).format(Date(a.dateAdded))
                     
-                    if (before == null) return@insertSeparators GalleryUiModel.Separator(dateLabel = afterDate, period = afterPeriod)
+                    if (before == null) return@insertSeparators GalleryUiModel.Separator(
+                        dateLabel = afterLabel, 
+                        period = afterPeriod,
+                        timestamp = a.dateAdded
+                    )
+                    
                     val b = (before as GalleryUiModel.Media).item
-                    if (FormatUtils.formatDate(b.dateAdded) != afterDate) {
-                        GalleryUiModel.Separator(dateLabel = afterDate, period = afterPeriod)
+                    val beforeLabel = FormatUtils.formatDate(b.dateAdded)
+                    if (beforeLabel != afterLabel) {
+                        GalleryUiModel.Separator(
+                            dateLabel = afterLabel, 
+                            period = afterPeriod,
+                            timestamp = a.dateAdded
+                        )
                     } else null
                 }
             }
